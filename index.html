@@ -2052,9 +2052,20 @@ function buildPrintHTML() {
 
   var timeDiff = function(t1,t2){return timeDiffStr(t1,t2)||'';};
 
-  var S = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;background:white}@page{size:letter portrait;margin:0.35in 0.4in}table{border-collapse:collapse;width:100%}';
+  // Use letter height minus margins to calculate remarks flex height
+  var S = [
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'html,body{height:100%;margin:0;padding:0}',
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;background:white;',
+    'display:flex;flex-direction:column;height:100%}',
+    '@page{size:letter portrait;margin:0.3in 0.38in}',
+    'table{border-collapse:collapse;width:100%}',
+    '#main-wrap{flex:1;display:flex;flex-direction:column;height:100%}',
+    '#remarks-box{flex:1;min-height:30px;border:1px solid #ccc;padding:4px 6px;',
+    'white-space:pre-wrap;font-size:7.5pt;margin-bottom:4px}'
+  ].join('');
 
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+S+'</style></head><body>';
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+S+'</style></head><body><div id="main-wrap">';
 
   // HEADER
   html += '<table style="margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px"><tr>';
@@ -2134,7 +2145,7 @@ function buildPrintHTML() {
 
   // REMARKS
   html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Remarks</div>';
-  html += '<div style="font-size:7.5pt;border:1px solid #ccc;padding:4px 6px;min-height:28px;white-space:pre-wrap;margin-bottom:4px">'+(F.remarks||'')+'</div>';
+  html += '<div id="remarks-box">'+(F.remarks||'')+'</div>';
 
   if(F.injName){
     var injP=PERSONNEL.find(function(p){return p.badge===F.injName;});
@@ -2150,7 +2161,7 @@ function buildPrintHTML() {
   else sigCell += 'Report by: ___________________________';
   html += '<td style="text-align:right;font-size:6.5pt">'+sigCell+'</td>';
   html += '</tr></table>';
-  html += '</body></html>';
+  html += '</div></body></html>';
   return html;
 }
 
