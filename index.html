@@ -1,0 +1,2664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Aurelius Fire & Rescue — Run Report</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, serif; background: #f5ede0; min-height: 100vh; }
+    button { cursor: pointer; font-family: Georgia, serif; }
+    input, select, textarea { font-family: Georgia, serif; }
+
+    /* ── Header ── */
+    #app-header {
+      background: linear-gradient(135deg, #8b0000 0%, #5a0000 100%);
+      color: #fff;
+      padding: 13px 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+    }
+    #header-eyebrow { font-size: 10px; letter-spacing: 0.15em; opacity: 0.7; text-transform: uppercase; }
+    #header-title   { font-size: 18px; font-weight: 700; }
+    #header-sub     { font-size: 11px; opacity: 0.65; margin-bottom: 7px; }
+    #tab-bar {
+      display: flex;
+      overflow-x: auto;
+      margin: 0 -16px;
+      scrollbar-width: none;
+    }
+    #tab-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 7px 11px;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.5);
+      border-bottom: 3px solid transparent;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .tab-btn.active { color: #fff; border-bottom-color: #ffcc00; }
+
+    /* ── Content ── */
+    #content { padding: 14px; max-width: 640px; margin: 0 auto; }
+    #tab-content { margin-top: 14px; }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      border: 1.5px solid #e0c9a6;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .card-title {
+      background: #8b0000;
+      color: #fff;
+      padding: 7px 13px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+    .card-body { padding: 13px 13px 10px; }
+
+    /* ── Form fields ── */
+    .lbl {
+      font-size: 11px;
+      font-weight: 700;
+      color: #8b0000;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .inp, .sel, .ta {
+      width: 100%;
+      box-sizing: border-box;
+      background: #fff8f0;
+      border: 1.5px solid #c8a97a;
+      border-radius: 6px;
+      padding: 9px 10px;
+      font-size: 15px;
+      color: #1a1a1a;
+      outline: none;
+      font-family: Georgia, serif;
+      display: block;
+    }
+    .ta { resize: vertical; }
+    .field-row { margin-bottom: 10px; }
+    .flex-row { display: flex; gap: 10px; }
+    .flex-1 { flex: 1; }
+    .flex-2 { flex: 2; }
+
+    /* ── Toggle ── */
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #f5ede0;
+      border: 1.5px solid #c8a97a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      user-select: none;
+      margin-bottom: 7px;
+      transition: all 0.15s;
+    }
+    .toggle.on { background: #8b0000; border-color: #8b0000; }
+    .toggle-box {
+      width: 18px; height: 18px;
+      border-radius: 4px;
+      background: #c8a97a;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 900;
+      color: transparent;
+    }
+    .toggle.on .toggle-box { background: #fff; color: #8b0000; }
+    .toggle-label { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+    .toggle-sub   { font-size: 11px; color: #888; }
+    .toggle.on .toggle-label { color: #fff; }
+    .toggle.on .toggle-sub   { color: #ffcccc; }
+
+    /* ── Nav buttons ── */
+    #nav-row { display: flex; gap: 10px; margin-top: 8px; margin-bottom: 20px; }
+    .btn-back  { flex:1; background:#fff; color:#8b0000; border:2px solid #8b0000; border-radius:10px; padding:12px 0; font-size:15px; font-weight:700; }
+    .btn-save  { flex:1; background:#555; color:#fff; border:none; border-radius:10px; padding:12px 0; font-size:15px; font-weight:700; transition:background 0.2s; }
+    .btn-save.saved { background: #2d6a2d; }
+    .btn-next  { flex:1; background:#8b0000; color:#fff; border:none; border-radius:10px; padding:12px 0; font-size:15px; font-weight:700; }
+    .btn-print { width:100%; background:#8b0000; color:#fff; border:none; border-radius:10px; padding:15px 0; font-size:17px; font-weight:700; letter-spacing:0.05em; margin-bottom:10px; }
+    .btn-clear { width:100%; background:none; color:#aaa; border:1px solid #ddd; border-radius:8px; padding:8px 0; font-size:12px; margin-bottom:30px; }
+
+    /* ── Preview summary ── */
+    #preview-summary {
+      border: 1px solid #ccc; border-radius: 6px;
+      padding: 10px; background: #fafafa;
+      font-size: 12px; line-height: 1.7;
+    }
+    #preview-summary .ps-title {
+      font-weight: 700; font-size: 13px;
+      border-bottom: 1px solid #ccc;
+      margin-bottom: 6px; padding-bottom: 3px;
+    }
+
+    /* ════════════════════════════════
+       PRINT FORM — hidden on screen
+       ════════════════════════════════ */
+    #print-form { display: none; }
+
+    .rpt {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 9pt;
+      color: #000;
+      width: 100%;
+      padding: 0.35in;
+    }
+    .rpt-title {
+      font-size: 15pt; font-weight: bold;
+      text-align: center; letter-spacing: 0.06em;
+      border-bottom: 2px solid #000;
+      padding-bottom: 4px; margin-bottom: 8px;
+    }
+    .rpt table { border-collapse: collapse; width: 100%; margin-bottom: 4px; }
+    .rpt td { border: 1px solid #000; padding: 2px 4px; vertical-align: top; font-size: 8.5pt; }
+    .rpt .bl { font-weight: bold; font-size: 7.5pt; white-space: nowrap; }
+    .rpt .ul { border-bottom: 1px solid #000; display: inline-block; min-height: 13px; padding-bottom: 1px; }
+    .rpt .sec-hdr {
+      font-weight: bold; font-size: 7.5pt;
+      background: #ddd; border: 1px solid #000;
+      padding: 2px 5px; border-bottom: none;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-top: 4px;
+    }
+    .rpt .chkbox {
+      display: inline-block;
+      width: 9px; height: 9px;
+      border: 1px solid #000;
+      text-align: center; line-height: 9px;
+      font-size: 8pt; margin-right: 3px; flex-shrink: 0;
+      vertical-align: middle;
+    }
+    .rpt .chkbox.on { background: #000; color: #fff; font-weight: bold; }
+    .rpt .disp-wrap { display: flex; flex-wrap: wrap; border: 1px solid #000; margin-bottom: 4px; }
+    .rpt .disp-item {
+      flex: 0 0 50%; padding: 2px 5px;
+      border-bottom: 1px solid #000; border-right: 1px solid #000;
+      display: flex; align-items: center; gap: 3px; font-size: 8pt;
+    }
+    .rpt .disp-item.full { flex: 0 0 100%; border-right: none; }
+    .rpt .disp-item:nth-child(even) { border-right: none; }
+    .rpt .loc-wrap { display: flex; flex-wrap: wrap; border: 1px solid #000; margin-bottom: 4px; }
+    .rpt .loc-item {
+      flex: 0 0 25%; padding: 2px 5px;
+      border-bottom: 1px solid #000; border-right: 1px solid #000;
+      display: flex; align-items: center; gap: 3px; font-size: 7.5pt;
+    }
+    .rpt .loc-item:nth-child(4n) { border-right: none; }
+    .rpt .pers-wrap { display: flex; flex-wrap: wrap; border: 1px solid #000; margin-bottom: 4px; }
+    .rpt .pers-item {
+      flex: 0 0 50%; padding: 2px 5px;
+      border-bottom: 1px solid #000; border-right: 1px solid #000;
+      display: flex; align-items: center; gap: 3px; font-size: 8pt;
+    }
+    .rpt .pers-item:nth-child(even) { border-right: none; }
+    .rpt .app-wrap { display: flex; flex-wrap: wrap; border: 1px solid #000; margin-bottom: 4px; }
+    .rpt .app-item {
+      flex: 0 0 20%; padding: 2px 5px;
+      border-bottom: 1px solid #000; border-right: 1px solid #000;
+      font-size: 7.5pt;
+    }
+    .rpt .app-item:nth-child(5n) { border-right: none; }
+    .rpt .remarks-box {
+      border: 1px solid #000; min-height: 55pt;
+      padding: 4px; font-size: 8.5pt;
+      white-space: pre-wrap; margin-bottom: 4px;
+    }
+    .rpt .footer-row {
+      display: flex; justify-content: space-between;
+      border-top: 1px solid #000; padding-top: 3px; font-size: 8pt;
+      margin-top: 4px;
+    }
+    .page2 { padding: 0.35in; }
+    .page2-title { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     PRINT FORM (hidden on screen, used by html2pdf)
+     ══════════════════════════════════════════ -->
+<div id="print-form">
+  <!-- filled by JS -->
+</div>
+<div id="share-status" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a4a8a;color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;font-family:Georgia,serif;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,0.3);text-align:center;max-width:320px;width:90%"></div>
+
+<!-- ══════════════════════════════════════════
+     APP UI
+     ══════════════════════════════════════════ -->
+<div id="app-header">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+    <div>
+      <div id="header-eyebrow">Run Report</div>
+      <div id="header-title">Aurelius Fire &amp; Rescue</div>
+      <div id="header-sub">Loading…</div>
+    </div>
+    <button id="reload-btn" title="Reload personnel roster" onclick="reloadPersonnel()"
+      style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);
+             color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+             white-space:nowrap;margin-top:6px;flex-shrink:0;font-family:Georgia,serif">
+      🔄 Reload Roster
+    </button>
+  </div>
+  <div id="tab-bar"></div>
+</div>
+
+<div id="content">
+  <div id="tab-content"></div>
+  <div id="nav-row"></div>
+  <button class="btn-clear" onclick="clearForm()">Clear all form data</button>
+</div>
+
+<script>
+// ══════════════════════════════
+// DATA — PERSONNEL loaded from personnel.json
+// ══════════════════════════════
+let PERSONNEL = [];  // filled by loadPersonnel()
+
+// Fallback roster used if personnel.json cannot be fetched
+const PERSONNEL_FALLBACK = [
+  {name:"Anthony, Robert",  badge:"8",   qual:"int"},
+  {name:"Bacon, Jason",     badge:"80",  qual:"int"},
+  {name:"Batis, Jeffery",   badge:"137", qual:""},
+  {name:"Bench, Tyler",     badge:"116", qual:"int"},
+  {name:"Bodoh, Lori",      badge:"88",  qual:"emt/int"},
+  {name:"Burns, Jim",       badge:"109", qual:"int"},
+  {name:"Burtless, John",   badge:"16",  qual:""},
+  {name:"Butler, Mitchell", badge:"124", qual:"int"},
+  {name:"Ely, Fred",        badge:"135", qual:""},
+  {name:"Farrance, James",  badge:"128", qual:"int"},
+  {name:"Foster, Barrie-Lyn",badge:"46", qual:"emt/int"},
+  {name:"Foster, Craig",    badge:"21",  qual:"int"},
+  {name:"Foster, Kevin",    badge:"23",  qual:"emt/int"},
+  {name:"Froio, Samuel",    badge:"135", qual:""},
+  {name:"Fronce, Ryan",     badge:"131", qual:"int"},
+  {name:"George, Michael",  badge:"110", qual:"int"},
+  {name:"Hultz, Kyle",      badge:"43",  qual:"int"},
+  {name:"Hultz, Ryan",      badge:"41",  qual:"int"},
+  {name:"Jackson, Luke",    badge:"132", qual:"int"},
+  {name:"Jackson, Matt",    badge:"108", qual:""},
+  {name:"Jakaub, Stan",     badge:"117", qual:"int"},
+  {name:"Lamaster, John Jr.",badge:"49", qual:"int"},
+  {name:"Marriott, Michael",badge:"111", qual:"int"},
+  {name:"McNabb, Tim",      badge:"121", qual:"emt/int"},
+  {name:"Parker, David",    badge:"102", qual:"emt/int"},
+  {name:"Perkins, David",   badge:"53",  qual:"emt/int"},
+  {name:"Rodriguez, Luis",  badge:"125", qual:"emt/int"},
+  {name:"Salato, Vincent",  badge:"126", qual:"int"},
+  {name:"Shaw, Andrew",     badge:"133", qual:"int"},
+  {name:"Shaw, John",       badge:"123", qual:"int"},
+  {name:"Thurston, Brad",   badge:"131", qual:"emt"},
+  {name:"Thurston, Christine",badge:"119",qual:"emt"},
+  {name:"Thurston, Ken Sr.",badge:"66",  qual:"int"},
+  {name:"Thurston, Kevin",  badge:"129", qual:"int"},
+  {name:"Thurston, Richard",badge:"114", qual:"int"},
+  {name:"Thurston, Rob Jr.",badge:"100", qual:"emt/int"},
+  {name:"Walborn, George Jr.",badge:"91",qual:"int"},
+  {name:"Walczyk, Tom",     badge:"70",  qual:"int"},
+  {name:"Wells, Jason",     badge:"120", qual:"int"},
+];
+
+async function loadPersonnel() {
+  // Always start with the built-in roster so the app is never stuck
+  if (PERSONNEL.length === 0) PERSONNEL = [...PERSONNEL_FALLBACK];
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000); // 4-second timeout
+    const res = await fetch('personnel.json?v=' + Date.now(), { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (Array.isArray(data) && data.length > 0) {
+      PERSONNEL = data.map(p => ({
+        name: String(p.name||'').trim(),
+        badge: String(p.badge||'').trim(),
+        qual: String(p.qual||'').trim().toLowerCase(),
+      })).filter(p => p.name && p.badge);
+      PERSONNEL.sort((a,b) => a.name.localeCompare(b.name));
+      console.log(`Loaded ${PERSONNEL.length} personnel from personnel.json`);
+    }
+  } catch(e) {
+    console.warn('Using built-in roster:', e.message);
+    PERSONNEL = [...PERSONNEL_FALLBACK];
+  }
+};
+
+const AMB_SERVICES = ["AMR","THROOP","FLEMING","Cayuga","Other"];
+
+const DISPATCH_TYPES = [
+  {code:"311",label:"Medical assist"},
+  {code:"321",label:"EMS call"},
+  {code:"322",label:"MVA"},
+  {code:"324",label:"MVA no injuries"},
+  {code:"350",label:"RIT call"},
+  {code:"411",label:"Liquid spill"},
+  {code:"813",label:"Wind/Storm"},
+  {code:"611",label:"Canceled en route"},
+  {code:"444",label:"Power line down"},
+  {code:"561",label:"Unauthorized burning"},
+  {code:"700",label:"False alarm"},
+];
+const DISPATCH_SPECIAL = [
+  {code:"STR",label:"Structure fire:"},
+  {code:"VEH",label:"Vehicle fire:"},
+  {code:"OUT",label:"Outdoor fire:"},
+  {code:"ELE",label:"Electrical problem:"},
+  {code:"OTH",label:"Other:"},
+];
+
+const LOCATIONS = [
+  {code:"121",label:"Gym"},       {code:"131",label:"Church"},
+  {code:"161",label:"Restaurant"},{code:"162",label:"Bar"},
+  {code:"816",label:"Farm"},      {code:"891",label:"Warehouse"},
+  {code:"962",label:"Residential street"},{code:"965",label:"Vehicle parking area"},
+  {code:"519",label:"Grocery Store"},{code:"559",label:"HD, Dicks, Petco"},
+  {code:"581",label:"Mall, Kohls"},{code:"700",label:"Manufacturing"},
+  {code:"210",label:"School"},    {code:"321",label:"ARC/IRA"},
+  {code:"419",label:"1-2 Family Dwelling"},{code:"512",label:"Convenience Store"},
+];
+
+const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
+const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVA","EMS","Law","Remarks","Preview"];
+
+const EMPTY = {
+  date:"", runNum:"15-", ic:"", enteredBy:"", badge:"", entryDate:"",
+  disp:"", enroute:"", arrived:"", clear:"", inQ:"",
+  dispType:"", dispDetail:"", dispActual:"", locCode:"", address:"",
+  apparatus:{}, apparatusDriver:{}, personnel:{},
+  emtCt:"", intCt:"", totalCt:"",
+  injName:"", injNum:"", rptFiled:"",
+  amb:[{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""}],
+  refusedPcr:["","",""],
+  law:["","",""],
+  cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
+  mutual:[], mutualDir:"", remarks:"", reportBy:"", pg:"1", pgOf:"1", signature:"",
+};
+
+// ══════════════════════════════
+// STATE
+// ══════════════════════════════
+let tab = 0;
+let F = {...EMPTY}; // placeholder — properly loaded after personnel fetch
+
+function loadForm() {
+  let data = {...EMPTY};
+  try {
+    const s = localStorage.getItem("afr_v4");
+    if (s) {
+      const parsed = JSON.parse(s);
+      data = Object.assign({}, EMPTY, parsed);
+    }
+  } catch(e) {}
+
+  // ── Migrations for old data formats ──────────────────────
+  // mutual: was string, now array
+  if (!Array.isArray(data.mutual)) {
+    data.mutual = data.mutual ? [data.mutual] : [];
+  }
+  // cars: expand to 6 if fewer
+  if (!Array.isArray(data.cars)) data.cars = [];
+  while (data.cars.length < 6) data.cars.push({model:"",plate:"",color:""});
+
+  // amb: old format had {svc,custom,als} → now {svc,custom,pcr}
+  if (!Array.isArray(data.amb)) data.amb = [];
+  while (data.amb.length < 3) data.amb.push({svc:"",custom:"",pcr:""});
+  data.amb = data.amb.map(a => ({
+    svc: a.svc||"", custom: a.custom||"",
+    pcr: a.pcr || a.als || ""  // migrate als→pcr if needed
+  }));
+
+  // refusedPcr: ensure array
+  if (!Array.isArray(data.refusedPcr)) data.refusedPcr = ["","",""];
+  while (data.refusedPcr.length < 3) data.refusedPcr.push("");
+
+  // law: ensure array of 3
+  if (!Array.isArray(data.law)) data.law = ["","",""];
+  while (data.law.length < 3) data.law.push("");
+
+  // apparatus / personnel: ensure objects
+  if (typeof data.apparatus !== 'object' || Array.isArray(data.apparatus)) data.apparatus = {};
+  if (typeof data.personnel !== 'object' || Array.isArray(data.personnel)) data.personnel = {};
+  if (typeof data.apparatusDriver !== 'object' || Array.isArray(data.apparatusDriver)) data.apparatusDriver = {};
+
+  return data;
+}
+
+function saveForm() {
+  try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
+}
+
+function clearForm() {
+  if (!confirm("Clear all form data and start fresh?")) return;
+  F = Object.assign({}, EMPTY,{
+    amb:[{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""}],
+    refusedPcr:["","",""],
+    law:["","",""],
+    cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
+    apparatus:{}, personnel:{},
+  });
+  try { localStorage.removeItem("afr_v4"); } catch(e) {}
+  render();
+}
+
+// ══════════════════════════════
+// HELPERS
+// ══════════════════════════════
+function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs||{})) {
+    if (k === 'onclick') el.addEventListener('click', v);
+    else if (k === 'onchange') el.addEventListener('change', v);
+    else if (k === 'oninput') el.addEventListener('input', v);
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else el.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c == null) continue;
+    el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return el;
+}
+
+function lbl(text) {
+  const d = document.createElement('div');
+  d.className = 'lbl';
+  d.textContent = text;
+  return d;
+}
+
+function inp(value, onInput, opts={}) {
+  const el = document.createElement('input');
+  el.type = opts.type || 'text';
+  el.value = value || '';
+  el.placeholder = opts.placeholder || '';
+  el.className = 'inp';
+  if (opts.style) Object.assign(el.style, opts.style);
+  el.addEventListener('input', e => { onInput(e.target.value); });
+  return el;
+}
+
+// Like inp but does NOT call onChange on every keystroke — only on blur/change.
+// Use this inside functions that re-render their parent container on save,
+// so the input field isn't destroyed mid-typing.
+function stableInp(value, onChange, opts={}) {
+  const el = document.createElement('input');
+  el.type = opts.type || 'text';
+  el.value = value || '';
+  el.placeholder = opts.placeholder || '';
+  el.className = 'inp';
+  if (opts.style) Object.assign(el.style, opts.style);
+  // Save on blur (when user leaves the field)
+  el.addEventListener('blur', e => { onChange(e.target.value); });
+  // Also save on Enter key
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); });
+  return el;
+}
+
+function sel(value, options, onChange, style={}) {
+  const el = document.createElement('select');
+  el.className = 'sel';
+  Object.assign(el.style, style);
+  for (const [v, t] of options) {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = t;
+    if (v === value) o.selected = true;
+    el.appendChild(o);
+  }
+  el.addEventListener('change', e => onChange(e.target.value));
+  return el;
+}
+
+function card(title, ...children) {
+  const c = document.createElement('div');
+  c.className = 'card';
+  if (title) {
+    const t = document.createElement('div');
+    t.className = 'card-title';
+    t.textContent = title;
+    c.appendChild(t);
+  }
+  const b = document.createElement('div');
+  b.className = 'card-body';
+  for (const child of children.flat()) {
+    if (child) b.appendChild(child);
+  }
+  c.appendChild(b);
+  return c;
+}
+
+function field(labelText, inputEl, mb=10) {
+  const w = document.createElement('div');
+  w.className = 'field-row';
+  w.style.marginBottom = mb+'px';
+  w.appendChild(lbl(labelText));
+  w.appendChild(inputEl);
+  return w;
+}
+
+function flexRow(...children) {
+  const d = document.createElement('div');
+  d.className = 'flex-row';
+  for (const c of children) if (c) d.appendChild(c);
+  return d;
+}
+
+function flexCol(flex, ...children) {
+  const d = document.createElement('div');
+  d.style.flex = flex;
+  for (const c of children) if (c) d.appendChild(c);
+  return d;
+}
+
+function toggle(labelText, subText, isOn, onToggle) {
+  const d = document.createElement('div');
+  d.className = 'toggle' + (isOn ? ' on' : '');
+
+  const box = document.createElement('div');
+  box.className = 'toggle-box';
+  box.textContent = '✓';
+
+  const textWrap = document.createElement('div');
+  const tl = document.createElement('div');
+  tl.className = 'toggle-label';
+  tl.textContent = labelText;
+  textWrap.appendChild(tl);
+  if (subText) {
+    const ts = document.createElement('div');
+    ts.className = 'toggle-sub';
+    ts.textContent = subText;
+    textWrap.appendChild(ts);
+  }
+
+  d.appendChild(box);
+  d.appendChild(textWrap);
+  d.addEventListener('click', () => onToggle(!isOn));
+  return d;
+}
+
+function timeInput(labelText, value, onChange) {
+  const w = document.createElement('div');
+  w.style.flex = '1';
+  w.appendChild(lbl(labelText));
+  const i = inp(value, onChange, {type:'time'});
+  w.appendChild(i);
+  return w;
+}
+
+function ambRow(i, renderFn) {
+  const a = F.amb[i];
+  const wrap = document.createElement('div');
+
+  // Service dropdown
+  const svcOpts = [["","— Select Service —"], ...AMB_SERVICES.map(s=>[s,s])];
+  wrap.appendChild(lbl('Service'));
+  const svcSel = sel(a.svc, svcOpts, v => {
+    F.amb[i] = {...F.amb[i], svc:v, custom:""};
+    saveForm();
+    if (renderFn) renderFn();
+  }, {marginBottom:'8px'});
+  wrap.appendChild(svcSel);
+
+  // Custom name if "Other"
+  if (a.svc === 'Other') {
+    const custLbl = document.createElement('div');
+    custLbl.className = 'lbl';
+    custLbl.textContent = 'Enter Service Name';
+    custLbl.style.marginBottom = '4px';
+    wrap.appendChild(custLbl);
+    const ci = inp(a.custom, v => { F.amb[i].custom = v; saveForm(); }, {placeholder:'Service name'});
+    ci.style.marginBottom = '8px';
+    wrap.appendChild(ci);
+  }
+
+  // PCR # for this ambulance (only shown once a service is selected)
+  if (a.svc) {
+    const pcrLbl = document.createElement('div');
+    pcrLbl.className = 'lbl';
+    pcrLbl.textContent = 'PCR #';
+    pcrLbl.style.marginBottom = '4px';
+    wrap.appendChild(pcrLbl);
+    const pcrInp = stableInp(a.pcr || '', v => {
+      F.amb[i].pcr = v;
+      saveForm();
+      if (renderFn) renderFn();
+    }, {placeholder:'PCR number…'});
+    wrap.appendChild(pcrInp);
+  }
+
+  return wrap;
+}
+
+function tabEMS() {
+  const wrap = document.createElement('div');
+
+  // ── Ambulances — progressive reveal ─────────────────────
+  const emsCard = document.createElement('div');
+  emsCard.className = 'card';
+  const emsTitle = document.createElement('div');
+  emsTitle.className = 'card-title';
+  emsTitle.textContent = 'Ambulances Used';
+  const emsBody = document.createElement('div');
+  emsBody.className = 'card-body';
+  emsCard.appendChild(emsTitle);
+  emsCard.appendChild(emsBody);
+
+  function renderAmb() {
+    emsBody.innerHTML = '';
+    // Show next only when previous has a service selected
+    const show = [
+      true,
+      !!(F.amb[0].svc),
+      !!(F.amb[1].svc),
+    ];
+    for (let i = 0; i < 3; i++) {
+      if (!show[i]) continue;
+      if (i > 0) {
+        const div = document.createElement('div');
+        div.style.cssText = 'border-top:1px solid #f0e8d8;margin:12px 0 12px';
+        emsBody.appendChild(div);
+      }
+      const rowTitle = document.createElement('div');
+      rowTitle.style.cssText = 'font-size:11px;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px';
+      rowTitle.textContent = `Ambulance ${i + 1}`;
+      emsBody.appendChild(rowTitle);
+      emsBody.appendChild(ambRow(i, renderAmb));
+    }
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:#aaa;margin-top:8px';
+    hint.textContent = 'Next ambulance appears after a service is selected.';
+    emsBody.appendChild(hint);
+  }
+  renderAmb();
+  wrap.appendChild(emsCard);
+
+  // ── Refused Transport PCR — progressive reveal ───────────
+  if (!F.refusedPcr) F.refusedPcr = ["","",""];
+  const refCard = document.createElement('div');
+  refCard.className = 'card';
+  const refTitle = document.createElement('div');
+  refTitle.className = 'card-title';
+  refTitle.textContent = 'Refused Transport PCR #';
+  const refBody = document.createElement('div');
+  refBody.className = 'card-body';
+  refCard.appendChild(refTitle);
+  refCard.appendChild(refBody);
+
+  function renderRefused() {
+    refBody.innerHTML = '';
+    const show = [
+      true,
+      !!(F.refusedPcr[0] && F.refusedPcr[0].trim()),
+      !!(F.refusedPcr[1] && F.refusedPcr[1].trim()),
+    ];
+    for (let i = 0; i < 3; i++) {
+      if (!show[i]) continue;
+      const rowWrap = document.createElement('div');
+      rowWrap.style.marginBottom = '8px';
+      const rl = document.createElement('div');
+      rl.className = 'lbl';
+      rl.style.marginBottom = '4px';
+      rl.textContent = `Refused Transport PCR #${i + 1}`;
+      rowWrap.appendChild(rl);
+      const ri = stableInp(F.refusedPcr[i] || '', v => {
+        F.refusedPcr[i] = v;
+        saveForm();
+        renderRefused();
+      }, {placeholder:'PCR number…'});
+      rowWrap.appendChild(ri);
+      refBody.appendChild(rowWrap);
+    }
+    const hint2 = document.createElement('div');
+    hint2.style.cssText = 'font-size:11px;color:#aaa;margin-top:4px';
+    hint2.textContent = 'Additional fields appear as each PCR # is entered.';
+    refBody.appendChild(hint2);
+  }
+  renderRefused();
+  wrap.appendChild(refCard);
+
+  return wrap;
+}
+
+// ══════════════════════════════
+// TABS
+// ══════════════════════════════
+function tabIncident() {
+  const wrap = document.createElement('div');
+
+  // Single shared style applied to every input/select in this card
+  const UNI = {
+    width: '100%',
+    boxSizing: 'border-box',
+    height: '46px',
+    padding: '0 12px',
+    fontSize: '16px',
+    lineHeight: '46px',
+    display: 'block',
+  };
+
+  function dateInp(value, onChange) {
+    const el = document.createElement('input');
+    el.type = 'date';
+    el.className = 'inp';
+    el.value = value || '';
+    el.setAttribute('inputmode', 'numeric');
+    Object.assign(el.style, UNI, { textAlign: 'left', justifyContent: 'flex-start' });
+    el.addEventListener('change', e => onChange(e.target.value));
+    return el;
+  }
+
+  function persDropdown(currentVal, onChange) {
+    const opts = [["","— Select —"], ...PERSONNEL.map(p=>[p.badge, p.name])];
+    const el = sel(currentVal, opts, onChange);
+    Object.assign(el.style, UNI);
+    return el;
+  }
+
+  function textInp(value, onChange, placeholder) {
+    const el = inp(value, onChange, {placeholder});
+    Object.assign(el.style, UNI);
+    return el;
+  }
+
+  // ── Incident Info card ──────────────────────────────────
+  const infoCard = card('Incident Info',
+    field('Date',                dateInp(F.date,       v=>{F.date=v;      saveForm();updateHeader();}), 10),
+    field('Run Report #',        textInp(F.runNum,     v=>{F.runNum=v;    saveForm();updateHeader();}, '15-0602'), 10),
+    field('Incident Commander',  persDropdown(F.ic,    v=>{F.ic=v;        saveForm();}), 0)
+  );
+  wrap.appendChild(infoCard);
+
+  // ── Location / Address card ─────────────────────────────
+  const locOpts = [["","— Select Location Type —"], ...LOCATIONS.map(l=>[l.code, l.code+" – "+l.label])];
+  const locSel = sel(F.locCode, locOpts, v=>{
+    F.locCode = v;
+    saveForm();
+    addrWrap.style.display = v ? 'block' : 'none';
+  });
+  Object.assign(locSel.style, UNI);
+
+  const addrInp = textInp(F.address, v=>{F.address=v;saveForm();}, 'Street address…');
+  const addrWrap = document.createElement('div');
+  addrWrap.style.display = F.locCode ? 'block' : 'none';
+  addrWrap.style.marginTop = '10px';
+  addrWrap.appendChild(lbl('Street Address'));
+  addrWrap.appendChild(addrInp);
+
+  const locBody = document.createElement('div');
+  locBody.appendChild(lbl('Location Type'));
+  locBody.appendChild(locSel);
+  locBody.appendChild(addrWrap);
+
+  const locCard = document.createElement('div');
+  locCard.className = 'card';
+  const locTitle = document.createElement('div');
+  locTitle.className = 'card-title';
+  locTitle.textContent = 'Location / Address';
+  const locCardBody = document.createElement('div');
+  locCardBody.className = 'card-body';
+  locCardBody.appendChild(locBody);
+  locCard.appendChild(locTitle);
+  locCard.appendChild(locCardBody);
+  wrap.appendChild(locCard);
+
+  // ── Mutual Aid card — progressive multi-select up to 12 ──
+  const MUTUAL_AGENCIES = [
+    "Throop Fire","Cayuga Fire","Seneca Falls Fire","Owasco Fire",
+    "Auburn Fire","Union Springs Fire","Port Byron Fire","Weedsport Fire",
+    "Fleming Fire","Montezuma Fire","Aurora Fire","Other"
+  ];
+
+  if (!Array.isArray(F.mutual)) F.mutual = F.mutual ? [F.mutual] : [];
+
+  const mutualCard = document.createElement('div');
+  mutualCard.className = 'card';
+  const mutualTitle = document.createElement('div');
+  mutualTitle.className = 'card-title';
+  mutualTitle.textContent = 'Mutual Aid';
+  const mutualBody = document.createElement('div');
+  mutualBody.className = 'card-body';
+
+  // Given / Received direction
+  const mutualDirLbl = document.createElement('div');
+  mutualDirLbl.className = 'lbl';
+  mutualDirLbl.textContent = 'Given or Received';
+  mutualDirLbl.style.marginBottom = '4px';
+  mutualBody.appendChild(mutualDirLbl);
+  const mutualDirSel = sel(F.mutualDir||'', [
+    ["","— Select —"],
+    ["Given","Given (we assisted them)"],
+    ["Received","Received (they assisted us)"],
+    ["Both","Both"]
+  ], v=>{ F.mutualDir=v; saveForm(); });
+  Object.assign(mutualDirSel.style, UNI, {marginBottom:'12px'});
+  mutualBody.appendChild(mutualDirSel);
+
+  // Agency list container
+  const agencyListDiv = document.createElement('div');
+  mutualBody.appendChild(agencyListDiv);
+
+  function renderMutualAgencies() {
+    agencyListDiv.innerHTML = '';
+
+    // Show existing entries + one new blank slot (if < 12)
+    const entries = [...F.mutual];
+    const showCount = Math.min(entries.length + 1, 12);
+
+    for (let i = 0; i < showCount; i++) {
+      const current = entries[i] || '';
+      const isCustom = current && !MUTUAL_AGENCIES.includes(current);
+
+      const rowDiv = document.createElement('div');
+      rowDiv.style.marginBottom = '10px';
+
+      const rowLbl = document.createElement('div');
+      rowLbl.className = 'lbl';
+      rowLbl.style.marginBottom = '4px';
+      rowLbl.textContent = i === 0 ? 'Agency' : `Agency ${i + 1}`;
+      rowDiv.appendChild(rowLbl);
+
+      // Agency dropdown
+      const agSel = document.createElement('select');
+      agSel.className = 'sel';
+      agSel.style.marginBottom = '6px';
+      const blankOpt = document.createElement('option');
+      blankOpt.value = ''; blankOpt.textContent = '— Select Agency —';
+      agSel.appendChild(blankOpt);
+      for (const a of MUTUAL_AGENCIES) {
+        const o = document.createElement('option');
+        o.value = a; o.textContent = a;
+        if (a === current || (a === 'Other' && isCustom)) o.selected = true;
+        agSel.appendChild(o);
+      }
+      rowDiv.appendChild(agSel);
+
+      // Custom text box
+      const custInp = document.createElement('input');
+      custInp.type = 'text';
+      custInp.className = 'inp';
+      custInp.placeholder = 'Enter agency name…';
+      custInp.style.marginBottom = '4px';
+      custInp.style.display = (current === 'Other' || isCustom) ? 'block' : 'none';
+      custInp.value = isCustom ? current : '';
+
+      agSel.addEventListener('change', () => {
+        if (agSel.value === 'Other') {
+          custInp.style.display = 'block';
+          custInp.focus();
+          F.mutual[i] = '';
+        } else {
+          custInp.style.display = 'none';
+          custInp.value = '';
+          F.mutual[i] = agSel.value;
+          // Remove trailing empty entries
+          while (F.mutual.length > 0 && !F.mutual[F.mutual.length-1]) F.mutual.pop();
+          saveForm();
+          renderMutualAgencies();
+        }
+      });
+
+      // Use blur so keyboard stays open
+      custInp.addEventListener('blur', () => {
+        F.mutual[i] = custInp.value.trim();
+        while (F.mutual.length > 0 && !F.mutual[F.mutual.length-1]) F.mutual.pop();
+        saveForm();
+        renderMutualAgencies();
+      });
+      custInp.addEventListener('keydown', e => { if(e.key==='Enter') custInp.blur(); });
+
+      rowDiv.appendChild(custInp);
+
+      // Remove button (only for filled entries)
+      if (current) {
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '✕ Remove';
+        removeBtn.style.cssText = 'background:none;border:none;color:#8b0000;font-size:12px;cursor:pointer;padding:0;margin-top:2px;font-family:Georgia,serif';
+        removeBtn.addEventListener('click', () => {
+          F.mutual.splice(i, 1);
+          saveForm();
+          renderMutualAgencies();
+        });
+        rowDiv.appendChild(removeBtn);
+      }
+
+      agencyListDiv.appendChild(rowDiv);
+    }
+
+    if (F.mutual.length >= 12) {
+      const cap = document.createElement('div');
+      cap.style.cssText = 'font-size:11px;color:#aaa;margin-top:4px';
+      cap.textContent = 'Maximum 12 agencies reached.';
+      agencyListDiv.appendChild(cap);
+    } else if (F.mutual.length > 0) {
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:11px;color:#aaa;margin-top:4px';
+      hint.textContent = 'Select an agency above to add another.';
+      agencyListDiv.appendChild(hint);
+    }
+  }
+
+  renderMutualAgencies();
+
+  mutualCard.appendChild(mutualTitle);
+  mutualCard.appendChild(mutualBody);
+  wrap.appendChild(mutualCard);
+
+  return wrap;
+}
+
+// ── Time helpers ────────────────────────────────────────
+function timeDiff(t1, t2) {
+  // returns "X min" difference between two HH:MM strings, or '' if invalid
+  if (!t1 || !t2) return '';
+  const [h1,m1] = t1.split(':').map(Number);
+  const [h2,m2] = t2.split(':').map(Number);
+  if (isNaN(h1)||isNaN(m1)||isNaN(h2)||isNaN(m2)) return '';
+  let diff = (h2*60+m2) - (h1*60+m1);
+  if (diff < 0) diff += 1440; // crosses midnight
+  if (diff === 0) return '';
+  return `${diff} min`;
+}
+
+function makeTimeField(labelText, storeKey, prevKey) {
+  const row = document.createElement('div');
+  Object.assign(row.style, { display:'flex', alignItems:'center', gap:'10px', marginBottom:'12px' });
+
+  // Label column
+  const labelCol = document.createElement('div');
+  Object.assign(labelCol.style, { width:'110px', flexShrink:'0' });
+  const l = document.createElement('div');
+  l.className = 'lbl';
+  l.textContent = labelText;
+  labelCol.appendChild(l);
+
+  // Input
+  const el = document.createElement('input');
+  el.type = 'text';
+  el.inputMode = 'numeric';
+  el.className = 'inp';
+  el.value = F[storeKey] || '';
+  el.placeholder = 'HH:MM';
+  Object.assign(el.style, { flex:'1', fontSize:'18px', fontWeight:'600', letterSpacing:'0.05em', textAlign:'center' });
+  el.addEventListener('input', e => {
+    let v = e.target.value.replace(/[^0-9]/g,'');
+    if (v.length > 4) v = v.slice(0,4);
+    // auto-insert colon
+    if (v.length >= 3) v = v.slice(0,2) + ':' + v.slice(2);
+    el.value = v;
+    F[storeKey] = v;
+    saveForm();
+    updateDiff();
+  });
+
+  // Diff badge
+  const diffBadge = document.createElement('div');
+  Object.assign(diffBadge.style, {
+    minWidth:'54px', textAlign:'center', fontSize:'12px', fontWeight:'700',
+    background:'#fff3cd', border:'1px solid #c8a97a', borderRadius:'6px',
+    padding:'4px 6px', color:'#5a3e00', flexShrink:'0'
+  });
+
+  function updateDiff() {
+    if (prevKey) {
+      const d = timeDiff(F[prevKey], F[storeKey]);
+      diffBadge.textContent = d ? '+'+d : '—';
+      diffBadge.style.background = d ? '#d4edda' : '#f5f5f5';
+      diffBadge.style.color = d ? '#155724' : '#999';
+    }
+  }
+  updateDiff();
+
+  row.appendChild(labelCol);
+  row.appendChild(el);
+  if (prevKey) row.appendChild(diffBadge);
+  return row;
+}
+
+function tabTimes() {
+  const wrap = document.createElement('div');
+
+  // ── Time entry card ──────────────────────────────────────
+  const body = document.createElement('div');
+  body.style.padding = '13px';
+
+  const note = document.createElement('div');
+  note.style.cssText = 'font-size:11px;color:#888;margin-bottom:12px';
+  note.textContent = 'Enter time as HHMM (e.g. 0405 → 04:05). Elapsed time shown in green.';
+  body.appendChild(note);
+
+  body.appendChild(makeTimeField('Dispatched',  'disp',    null));
+  body.appendChild(makeTimeField('Enroute',     'enroute', 'disp'));
+  body.appendChild(makeTimeField('Arrived',     'arrived', 'enroute'));
+  body.appendChild(makeTimeField('Cleared',     'clear',   'arrived'));
+  body.appendChild(makeTimeField('In Quarters', 'inQ',     'clear'));
+
+  const c = document.createElement('div');
+  c.className = 'card';
+  const t = document.createElement('div');
+  t.className = 'card-title';
+  t.textContent = 'Times';
+  c.appendChild(t);
+  c.appendChild(body);
+  wrap.appendChild(c);
+
+  // ── Response Time Summary card ───────────────────────────
+  function parseMin(t) {
+    if (!t) return null;
+    const p = t.split(':');
+    const h = parseInt(p[0]||0), m = parseInt(p[1]||0);
+    return isNaN(h)||isNaN(m) ? null : h*60+m;
+  }
+  function fmtDur(mins) {
+    if (mins === null || mins < 0) return '—';
+    const h = Math.floor(mins/60), m = mins%60;
+    return h > 0 ? `${h}h ${m}m` : `${m} min`;
+  }
+
+  const segments = [
+    ['Total Call Time (Dispatch → In Quarters)', F.disp, F.inQ],
+  ];
+
+  const sumCard = document.createElement('div');
+  sumCard.className = 'card';
+  const sumTitle = document.createElement('div');
+  sumTitle.className = 'card-title';
+  sumTitle.textContent = 'Response Time Summary';
+  const sumBody = document.createElement('div');
+  sumBody.className = 'card-body';
+  sumBody.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px';
+
+  for (const [label, t1, t2] of segments) {
+    const p1 = parseMin(t1), p2 = parseMin(t2);
+    let diff = null;
+    if (p1 !== null && p2 !== null) { diff = p2 - p1; if (diff < 0) diff += 1440; }
+
+    const box = document.createElement('div');
+    box.style.cssText = 'flex:1;min-width:130px;background:#f5ede0;border:1px solid #e0c9a6;border-radius:6px;padding:8px 10px';
+    const dl = document.createElement('div');
+    dl.style.cssText = 'font-size:10px;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px';
+    dl.textContent = label;
+    const dv = document.createElement('div');
+    dv.style.cssText = 'font-size:18px;font-weight:700;color:#1a1a1a';
+    dv.textContent = diff !== null ? fmtDur(diff) : '—';
+    box.appendChild(dl);
+    box.appendChild(dv);
+    sumBody.appendChild(box);
+  }
+
+  sumCard.appendChild(sumTitle);
+  sumCard.appendChild(sumBody);
+  wrap.appendChild(sumCard);
+
+  return wrap;
+}
+
+function tabDispatch() {
+  const wrap = document.createElement('div');
+
+  // ── Dispatch type toggles ────────────────────────────────
+  const allTypes = [...DISPATCH_TYPES, ...DISPATCH_SPECIAL];
+  const togglesWrap = document.createElement('div');
+  for (const d of allTypes) {
+    const isSelected = F.dispType === d.code;
+    const tog = toggle(d.label, d.code, isSelected, on => {
+      F.dispType = on ? d.code : '';
+      if (!on) { F.dispActual = ''; F.dispDetail = ''; }
+      saveForm();
+      renderTab();
+    });
+    togglesWrap.appendChild(tog);
+    if (isSelected) {
+      const textBox = document.createElement('div');
+      Object.assign(textBox.style, {
+        background:'#fff8f0', border:'1.5px solid #8b0000',
+        borderTop:'none', borderRadius:'0 0 8px 8px',
+        padding:'10px 12px', marginBottom:'7px', marginTop:'-7px',
+      });
+      const textLbl = document.createElement('div');
+      textLbl.className = 'lbl';
+      textLbl.textContent = 'Actual Dispatch Text';
+      textLbl.style.marginBottom = '5px';
+      textBox.appendChild(textLbl);
+      const ta = document.createElement('textarea');
+      ta.className = 'ta';
+      ta.rows = 3;
+      ta.placeholder = 'Enter the actual dispatch text received…';
+      ta.value = F.dispActual || '';
+      Object.assign(ta.style, { fontSize:'14px', lineHeight:'1.4' });
+      ta.addEventListener('input', e => { F.dispActual = e.target.value; saveForm(); });
+      textBox.appendChild(ta);
+      if (['STR','VEH','OUT','ELE','OTH'].includes(d.code)) {
+        const detLbl = document.createElement('div');
+        detLbl.className = 'lbl';
+        detLbl.textContent = 'Additional Details';
+        detLbl.style.cssText = 'margin-top:8px;margin-bottom:4px';
+        textBox.appendChild(detLbl);
+        const detInp = inp(F.dispDetail||'', v=>{ F.dispDetail=v; saveForm(); }, { placeholder:'e.g. address, structure type…' });
+        textBox.appendChild(detInp);
+      }
+      togglesWrap.appendChild(textBox);
+    }
+  }
+  wrap.appendChild(card('Dispatched As', togglesWrap));
+  return wrap;
+}
+
+function tabApparatus() {
+  const wrap = document.createElement('div');
+  const persOpts = [["","— Select Driver —"], ...PERSONNEL.map(p=>[p.badge, p.name+(p.qual?' ('+p.qual+')':'')])];
+
+  for (const a of APPARATUS) {
+    const isOn = !!F.apparatus[a];
+
+    // Container card per apparatus
+    const itemWrap = document.createElement('div');
+    Object.assign(itemWrap.style, { marginBottom:'10px' });
+
+    // Toggle row
+    const tog = toggle(a, isOn && F.apparatusDriver && F.apparatusDriver[a]
+      ? 'Driver: ' + (PERSONNEL.find(p=>p.badge===(F.apparatusDriver||{})[a])||{name:''}).name
+      : '', isOn, on => {
+      if (on) F.apparatus[a] = true; else { delete F.apparatus[a]; if (F.apparatusDriver) delete F.apparatusDriver[a]; }
+      saveForm(); renderTab();
+    });
+    itemWrap.appendChild(tog);
+
+    // If active, show driver dropdown
+    if (isOn) {
+      if (!F.apparatusDriver) F.apparatusDriver = {};
+      const driverSel = sel(F.apparatusDriver[a]||'', persOpts, v => {
+        if (!F.apparatusDriver) F.apparatusDriver = {};
+        F.apparatusDriver[a] = v;
+        saveForm();
+        // update sub label without full re-render
+        const sub = tog.querySelector('.toggle-sub');
+        if (sub) sub.textContent = v ? 'Driver: '+(PERSONNEL.find(p=>p.badge===v)||{name:''}).name : '';
+      }, { marginTop:'6px', borderRadius:'6px', padding:'8px 10px', fontSize:'14px' });
+      itemWrap.appendChild(driverSel);
+    }
+
+    wrap.appendChild(itemWrap);
+  }
+
+  const c = document.createElement('div');
+  c.className = 'card';
+  const t = document.createElement('div');
+  t.className = 'card-title';
+  t.textContent = 'Apparatus Responding';
+  c.appendChild(t);
+  const b = document.createElement('div');
+  b.className = 'card-body';
+  b.appendChild(wrap);
+  c.appendChild(b);
+  return c;
+}
+
+function tabPersonnel() {
+  const selCount = PERSONNEL.filter(p=>F.personnel[p.badge]).length;
+
+  // Calculate total personnel hours = selCount × totalCallMinutes
+  function parseMin(t) {
+    if (!t) return null;
+    const p = t.split(':');
+    const h = parseInt(p[0]||0), m = parseInt(p[1]||0);
+    return isNaN(h)||isNaN(m) ? null : h*60+m;
+  }
+  const tDisp = parseMin(F.disp), tInQ = parseMin(F.inQ);
+  let callMins = null;
+  if (tDisp !== null && tInQ !== null) {
+    callMins = tInQ - tDisp;
+    if (callMins < 0) callMins += 1440;
+  }
+  const totalPersonnel = parseInt(F.totalCt) || selCount;
+  const persHours = (callMins !== null && totalPersonnel > 0)
+    ? ((callMins * totalPersonnel) / 60).toFixed(1)
+    : null;
+
+  const wrap = document.createElement('div');
+  const togglesWrap = document.createElement('div');
+  for (const p of PERSONNEL) {
+    togglesWrap.appendChild(toggle(p.name, `Badge ${p.badge}${p.qual?' · '+p.qual.toUpperCase():''}`, !!F.personnel[p.badge], on => {
+      if (on) F.personnel[p.badge]=true; else delete F.personnel[p.badge];
+      saveForm(); renderTab();
+    }));
+  }
+  wrap.appendChild(card(`Personnel — ${selCount} selected`, togglesWrap));
+
+  // Counts card with personnel hours
+  const countCard = document.createElement('div');
+  countCard.className = 'card';
+  const countTitle = document.createElement('div');
+  countTitle.className = 'card-title';
+  countTitle.textContent = 'Counts';
+  const countBody = document.createElement('div');
+  countBody.className = 'card-body';
+
+  countBody.appendChild(flexRow(
+    flexCol(1, lbl('EMTs'), inp(F.emtCt, v=>{F.emtCt=v;saveForm();}, {type:'number', placeholder:String(PERSONNEL.filter(p=>F.personnel[p.badge]&&p.qual&&p.qual.includes('emt')).length)+' (auto)'})),
+    flexCol(1, lbl('Interior FF'), inp(F.intCt, v=>{F.intCt=v;saveForm();}, {type:'number', placeholder:String(PERSONNEL.filter(p=>F.personnel[p.badge]&&p.qual&&p.qual.includes('int')).length)+' (auto)'})),
+    flexCol(1, lbl('Total'), inp(F.totalCt, v=>{F.totalCt=v;saveForm();}, {type:'number', placeholder:String(selCount)+' (auto)'}))
+  ));
+
+  // Personnel hours display
+  const phDiv = document.createElement('div');
+  phDiv.style.cssText = 'margin-top:12px;background:#f5ede0;border:1px solid #e0c9a6;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:14px';
+  const phLabel = document.createElement('div');
+  phLabel.style.cssText = 'font-size:11px;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.05em';
+  phLabel.textContent = 'Total Personnel Hours';
+  const phValue = document.createElement('div');
+  phValue.style.cssText = 'font-size:22px;font-weight:700;color:#1a1a1a';
+  phValue.textContent = persHours !== null ? persHours + ' hrs' : '—';
+  const phNote = document.createElement('div');
+  phNote.style.cssText = 'font-size:10px;color:#888;margin-top:1px';
+  phNote.textContent = callMins !== null
+    ? `${totalPersonnel} personnel × ${callMins} min call`
+    : 'Set times on Dispatch tab to calculate';
+  const phLeft = document.createElement('div');
+  phLeft.appendChild(phLabel);
+  phLeft.appendChild(phNote);
+  phDiv.appendChild(phLeft);
+  phDiv.appendChild(phValue);
+  countBody.appendChild(phDiv);
+
+  countCard.appendChild(countTitle);
+  countCard.appendChild(countBody);
+  wrap.appendChild(countCard);
+  return wrap;
+}
+
+// ── Common vehicles list ──────────────────────────────────
+const COMMON_VEHICLES = [
+  // Pickup Trucks
+  "Ford F-150","Ford F-250","Ford F-350",
+  "Chevrolet Silverado 1500","Chevrolet Silverado 2500","Chevrolet Silverado 3500",
+  "GMC Sierra 1500","GMC Sierra 2500","GMC Sierra 3500",
+  "Ram 1500","Ram 2500","Ram 3500",
+  "Toyota Tacoma","Toyota Tundra",
+  "Nissan Frontier","Nissan Titan",
+  // SUVs
+  "Ford Explorer","Ford Escape","Ford Edge","Ford Expedition","Ford Bronco",
+  "Chevrolet Equinox","Chevrolet Traverse","Chevrolet Tahoe","Chevrolet Suburban",
+  "GMC Acadia","GMC Yukon","GMC Terrain",
+  "Jeep Grand Cherokee","Jeep Cherokee","Jeep Wrangler","Jeep Compass",
+  "Toyota RAV4","Toyota Highlander","Toyota 4Runner","Toyota Sequoia",
+  "Honda CR-V","Honda Pilot","Honda HR-V","Honda Passport",
+  "Nissan Rogue","Nissan Murano","Nissan Pathfinder","Nissan Armada",
+  "Hyundai Tucson","Hyundai Santa Fe","Hyundai Palisade",
+  "Kia Sportage","Kia Sorento","Kia Telluride",
+  "Subaru Forester","Subaru Outback","Subaru Crosstrek",
+  "Mazda CX-5","Mazda CX-9",
+  "Dodge Durango","Dodge Journey",
+  "Lincoln Navigator","Lincoln Corsair",
+  "Cadillac Escalade","Cadillac XT5",
+  // Sedans / Cars
+  "Toyota Camry","Toyota Corolla","Toyota Prius",
+  "Honda Accord","Honda Civic",
+  "Ford Fusion","Ford Mustang",
+  "Chevrolet Malibu","Chevrolet Impala","Chevrolet Camaro",
+  "Nissan Altima","Nissan Sentra","Nissan Maxima",
+  "Hyundai Elantra","Hyundai Sonata",
+  "Kia Optima","Kia Forte",
+  "Subaru Impreza","Subaru Legacy",
+  "Dodge Charger","Dodge Challenger",
+  "Chrysler 300",
+  "Volkswagen Jetta","Volkswagen Passat","Volkswagen Tiguan",
+  "BMW 3 Series","BMW 5 Series","BMW X5",
+  "Mercedes-Benz C-Class","Mercedes-Benz E-Class","Mercedes-Benz GLE",
+  "Audi A4","Audi Q5",
+  "Lexus RX","Lexus ES",
+  // Vans / Minivans
+  "Chrysler Pacifica","Chrysler Voyager",
+  "Honda Odyssey","Toyota Sienna","Kia Carnival",
+  "Ford Transit","Ford Transit Connect",
+  "Chevrolet Express","GMC Savana",
+  "Ram ProMaster","Ram ProMaster City",
+  // Commercial / Other
+  "Box Truck","Tractor Trailer / Semi","Dump Truck","Flatbed Truck",
+  "School Bus","Coach Bus","Transit Bus",
+  "ATV / UTV","Motorcycle","Snowmobile",
+  "Other (type below)",
+];
+
+function vehicleSelector(currentVal, onChange) {
+  const wrap = document.createElement('div');
+
+  // Determine if current value is a custom entry
+  const isCustom = currentVal && !COMMON_VEHICLES.includes(currentVal);
+  const selectVal = isCustom ? 'Other (type below)' : (currentVal || '');
+
+  const dd = document.createElement('select');
+  dd.className = 'sel';
+  dd.style.marginBottom = '8px';
+
+  // Build option list grouped by category
+  const groups = [
+    { label: '— Select Vehicle —', items: [''] },
+    { label: 'Pickup Trucks',      items: COMMON_VEHICLES.slice(0, 14) },
+    { label: 'SUVs',               items: COMMON_VEHICLES.slice(14, 46) },
+    { label: 'Cars & Sedans',      items: COMMON_VEHICLES.slice(46, 76) },
+    { label: 'Vans & Minivans',    items: COMMON_VEHICLES.slice(76, 87) },
+    { label: 'Commercial & Other', items: COMMON_VEHICLES.slice(87) },
+  ];
+
+  for (const g of groups) {
+    if (g.label === '— Select Vehicle —') {
+      const o = document.createElement('option');
+      o.value = ''; o.textContent = '— Select Vehicle —';
+      dd.appendChild(o);
+    } else {
+      const og = document.createElement('optgroup');
+      og.label = g.label;
+      for (const v of g.items) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        if (v === selectVal) o.selected = true;
+        og.appendChild(o);
+      }
+      dd.appendChild(og);
+    }
+  }
+
+  // Custom text input (shown when "Other" selected or custom value)
+  const customInp = document.createElement('input');
+  customInp.type = 'text';
+  customInp.className = 'inp';
+  customInp.placeholder = 'Year, Make, Model (e.g. 2019 Ford F-150)';
+  customInp.style.display = (selectVal === 'Other (type below)' || isCustom) ? 'block' : 'none';
+  customInp.value = isCustom ? currentVal : '';
+
+  dd.addEventListener('change', () => {
+    const v = dd.value;
+    if (v === 'Other (type below)') {
+      customInp.style.display = 'block';
+      customInp.focus();
+      onChange('');
+    } else {
+      customInp.style.display = 'none';
+      onChange(v);
+    }
+  });
+
+  customInp.addEventListener('input', () => { onChange(customInp.value); });
+
+  wrap.appendChild(dd);
+  wrap.appendChild(customInp);
+  return wrap;
+}
+
+const VEHICLE_COLORS = [
+  "Black","White","Silver","Gray","Red","Blue","Dark Blue","Light Blue",
+  "Green","Dark Green","Brown","Tan / Beige","Gold","Yellow","Orange",
+  "Purple","Maroon / Burgundy","Pink","Teal","Cream / Off-White",
+  "Two-Tone","Other",
+];
+
+const LAW_AGENCIES = [
+  "New York State Police",
+  "Cayuga County Sheriff's Department",
+  "City of Auburn Police",
+  "Other",
+];
+
+function colorSelector(currentVal, onChange) {
+  const isCustom = currentVal && !VEHICLE_COLORS.includes(currentVal);
+  const wrap = document.createElement('div');
+
+  const dd = document.createElement('select');
+  dd.className = 'sel';
+
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— Select Color —';
+  dd.appendChild(blank);
+
+  for (const c of VEHICLE_COLORS) {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    if (c === currentVal || (c === 'Other' && isCustom)) o.selected = true;
+    dd.appendChild(o);
+  }
+
+  const customInp = document.createElement('input');
+  customInp.type = 'text';
+  customInp.className = 'inp';
+  customInp.placeholder = 'Describe color…';
+  customInp.style.marginTop = '6px';
+  customInp.style.display = (currentVal === 'Other' || isCustom) ? 'block' : 'none';
+  customInp.value = isCustom ? currentVal : '';
+
+  dd.addEventListener('change', () => {
+    if (dd.value === 'Other') {
+      customInp.style.display = 'block';
+      customInp.focus();
+      onChange('Other');
+    } else {
+      customInp.style.display = 'none';
+      onChange(dd.value);
+    }
+  });
+  customInp.addEventListener('input', () => onChange(customInp.value));
+
+  wrap.appendChild(dd);
+  wrap.appendChild(customInp);
+  return wrap;
+}
+
+function lawRow(idx, renderFn) {
+  // Build one law enforcement row: agency dropdown + optional unit/officer text
+  const current = F.law[idx] || '';
+  // stored as "Agency||UnitDetail"
+  const parts = current.split('||');
+  const agency = parts[0] || '';
+  const detail = parts[1] || '';
+  const isOther = agency === 'Other';
+  const isCustomAgency = agency && !LAW_AGENCIES.includes(agency);
+
+  const wrap = document.createElement('div');
+  wrap.style.marginBottom = '10px';
+
+  const rowLbl = document.createElement('div');
+  rowLbl.className = 'lbl';
+  rowLbl.textContent = `Officer / Unit ${idx + 1}`;
+  rowLbl.style.marginBottom = '4px';
+  wrap.appendChild(rowLbl);
+
+  const agencySel = document.createElement('select');
+  agencySel.className = 'sel';
+  agencySel.style.marginBottom = '6px';
+
+  const blankOpt = document.createElement('option');
+  blankOpt.value = ''; blankOpt.textContent = '— Select Agency —';
+  agencySel.appendChild(blankOpt);
+
+  for (const a of LAW_AGENCIES) {
+    const o = document.createElement('option');
+    o.value = a; o.textContent = a;
+    if (a === agency) o.selected = true;
+    agencySel.appendChild(o);
+  }
+
+  // Custom agency text box
+  const customAgency = document.createElement('input');
+  customAgency.type = 'text';
+  customAgency.className = 'inp';
+  customAgency.placeholder = 'Enter agency name…';
+  customAgency.style.marginBottom = '6px';
+  customAgency.style.display = isOther ? 'block' : 'none';
+  customAgency.value = isOther ? (isCustomAgency ? agency : '') : '';
+
+  // Officer / unit detail text box (shown once agency is chosen)
+  const detailInp = document.createElement('input');
+  detailInp.type = 'text';
+  detailInp.className = 'inp';
+  detailInp.placeholder = 'Officer name / badge / unit #';
+  detailInp.style.display = agency ? 'block' : 'none';
+  detailInp.value = detail;
+
+  function save() {
+    const ag = agencySel.value === 'Other'
+      ? (customAgency.value.trim() || 'Other')
+      : agencySel.value;
+    F.law[idx] = ag ? ag + '||' + detailInp.value : '';
+    saveForm();
+    // Only trigger re-render from the dropdown change, not from text fields
+  }
+
+  function saveAndRender() {
+    save();
+    if (renderFn) renderFn();
+  }
+
+  agencySel.addEventListener('change', () => {
+    customAgency.style.display = agencySel.value === 'Other' ? 'block' : 'none';
+    detailInp.style.display = agencySel.value ? 'block' : 'none';
+    if (agencySel.value !== 'Other') customAgency.value = '';
+    saveAndRender();
+  });
+  // Use blur not input — so keyboard stays open while typing
+  customAgency.addEventListener('blur',  save);
+  customAgency.addEventListener('keydown', e => { if(e.key==='Enter') customAgency.blur(); });
+  detailInp.addEventListener('blur',  saveAndRender);
+  detailInp.addEventListener('keydown', e => { if(e.key==='Enter') detailInp.blur(); });
+
+  wrap.appendChild(agencySel);
+  wrap.appendChild(customAgency);
+  wrap.appendChild(detailInp);
+  return wrap;
+}
+
+function tabMVA() {
+  const wrap = document.createElement('div');
+
+  // Ensure cars array has 6 slots
+  while (F.cars.length < 6) F.cars.push({model:"",plate:"",color:""});
+
+  // Card container
+  const mvaCard = document.createElement('div');
+  mvaCard.className = 'card';
+  const mvaTitle = document.createElement('div');
+  mvaTitle.className = 'card-title';
+  mvaTitle.textContent = 'Vehicles Involved';
+  const mvaBody = document.createElement('div');
+  mvaBody.className = 'card-body';
+  mvaCard.appendChild(mvaTitle);
+  mvaCard.appendChild(mvaBody);
+
+  function vehicleComplete(i) {
+    // A vehicle slot is "started" if any field has a value
+    const c = F.cars[i];
+    return !!(c.model || c.plate || c.color);
+  }
+
+  function renderVehicles() {
+    mvaBody.innerHTML = '';
+
+    for (let i = 0; i < 6; i++) {
+      // Show slot if: it's the first, OR the previous slot has been started
+      const show = i === 0 || vehicleComplete(i - 1);
+      if (!show) break;
+
+      // Divider between entries
+      if (i > 0) {
+        const div = document.createElement('div');
+        div.style.cssText = 'border-top:1px solid #f0e8d8;margin:14px 0 14px';
+        mvaBody.appendChild(div);
+      }
+
+      const rowTitle = document.createElement('div');
+      rowTitle.style.cssText = 'font-size:11px;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px';
+      rowTitle.textContent = `Vehicle ${i + 1}`;
+      mvaBody.appendChild(rowTitle);
+
+      // Vehicle selector
+      const modelLbl = document.createElement('div');
+      modelLbl.className = 'lbl';
+      modelLbl.textContent = 'Year / Make / Model';
+      modelLbl.style.marginBottom = '4px';
+      mvaBody.appendChild(modelLbl);
+
+      const vs = vehicleSelector(F.cars[i].model, v => {
+        F.cars[i].model = v;
+        saveForm();
+        renderVehicles();
+      });
+      mvaBody.appendChild(vs);
+
+      mvaBody.appendChild((() => { const d = document.createElement('div'); d.style.height = '8px'; return d; })());
+
+      // Plate and Color
+      const plateCol = flexCol(1,
+        lbl('Plate #'),
+        stableInp(F.cars[i].plate, v => { F.cars[i].plate = v; saveForm(); renderVehicles(); }, {placeholder:'Plate #'})
+      );
+
+      const colorCol = document.createElement('div');
+      colorCol.style.flex = '1';
+      const colorLbl = document.createElement('div');
+      colorLbl.className = 'lbl';
+      colorLbl.style.marginBottom = '4px';
+      colorLbl.textContent = 'Color';
+      colorCol.appendChild(colorLbl);
+      colorCol.appendChild(colorSelector(F.cars[i].color, v => {
+        F.cars[i].color = v;
+        saveForm();
+        renderVehicles();
+      }));
+
+      mvaBody.appendChild(flexRow(plateCol, colorCol));
+    }
+
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:#aaa;margin-top:10px';
+    const shown = F.cars.filter((_,i) => i===0 || vehicleComplete(i-1)).length;
+    if (shown < 6) hint.textContent = `Vehicle ${shown + 1} will appear after Vehicle ${shown} is filled in.`;
+    mvaBody.appendChild(hint);
+  }
+
+  renderVehicles();
+  wrap.appendChild(mvaCard);
+  return wrap;
+}
+
+function tabLaw() {
+  const wrap = document.createElement('div');
+  const lawCard = document.createElement('div');
+  lawCard.className = 'card';
+  const lawTitle = document.createElement('div');
+  lawTitle.className = 'card-title';
+  lawTitle.textContent = 'Law Enforcement';
+  const lawBody = document.createElement('div');
+  lawBody.className = 'card-body';
+  lawCard.appendChild(lawTitle);
+  lawCard.appendChild(lawBody);
+
+  function renderLaw() {
+    lawBody.innerHTML = '';
+    const showRows = [
+      true,
+      !!(F.law[0] && F.law[0].trim()),
+      !!(F.law[1] && F.law[1].trim()),
+    ];
+    for (let i = 0; i < 3; i++) {
+      if (showRows[i]) lawBody.appendChild(lawRow(i, renderLaw));
+    }
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:11px;color:#aaa;margin-top:4px';
+    hint.textContent = 'Additional officer fields appear after each entry.';
+    lawBody.appendChild(hint);
+  }
+  renderLaw();
+
+  wrap.appendChild(lawCard);
+  return wrap;
+}
+
+
+function tabRemarks() {
+  const wrap = document.createElement('div');
+
+  // ── Remarks ──────────────────────────────────────────────
+  const ta = document.createElement('textarea');
+  ta.className = 'ta';
+  ta.rows = 5;
+  ta.placeholder = 'Cause of incident, extent of damage, insurance carrier…';
+  ta.value = F.remarks;
+  ta.addEventListener('input', e => { F.remarks = e.target.value; saveForm(); });
+  wrap.appendChild(card('Remarks', lbl('Cause of Incident, Damage, Insurance Carrier, etc.'), ta));
+
+  // ── Personnel Injured ────────────────────────────────────
+  const injCard = document.createElement('div');
+  injCard.className = 'card';
+  const injTitle = document.createElement('div');
+  injTitle.className = 'card-title';
+  injTitle.textContent = 'Personnel Injured';
+  const injBody = document.createElement('div');
+  injBody.className = 'card-body';
+
+  // Name — pull down from personnel database
+  const injNameLbl = document.createElement('div');
+  injNameLbl.className = 'lbl';
+  injNameLbl.textContent = 'Name';
+  injNameLbl.style.marginBottom = '4px';
+  injBody.appendChild(injNameLbl);
+
+  const injOpts = [["","— Select (if applicable) —"], ...PERSONNEL.map(p=>[p.badge, p.name])];
+  const injSel = sel(F.injName, injOpts, v => { F.injName = v; saveForm(); });
+  injSel.style.marginBottom = '12px';
+  injBody.appendChild(injSel);
+
+  // Badge number (auto-filled from selection, read-only display)
+  const injBadgeWrap = document.createElement('div');
+  injBadgeWrap.style.marginBottom = '12px';
+  const injBadgeLbl = document.createElement('div');
+  injBadgeLbl.className = 'lbl';
+  injBadgeLbl.textContent = 'Badge Number';
+  injBadgeLbl.style.marginBottom = '4px';
+  const injBadgeVal = document.createElement('div');
+  injBadgeVal.style.cssText = 'padding:9px 10px;background:#f0e8d8;border:1.5px solid #c8a97a;border-radius:6px;font-size:15px;color:#555;min-height:40px';
+  const resolvedBadge = F.injName ? (PERSONNEL.find(p=>p.badge===F.injName)||{badge:'—'}).badge : '—';
+  injBadgeVal.textContent = resolvedBadge;
+  injBadgeWrap.appendChild(injBadgeLbl);
+  injBadgeWrap.appendChild(injBadgeVal);
+  injBody.appendChild(injBadgeWrap);
+
+  // Update badge display when name changes
+  injSel.addEventListener('change', () => {
+    const found = PERSONNEL.find(p => p.badge === F.injName);
+    injBadgeVal.textContent = found ? found.badge : '—';
+  });
+
+  // Report Filed
+  const rptLbl = document.createElement('div');
+  rptLbl.className = 'lbl';
+  rptLbl.textContent = 'Report Filed';
+  rptLbl.style.marginBottom = '4px';
+  injBody.appendChild(rptLbl);
+  const rptSel = sel(F.rptFiled, [["","—"],["YES","YES"],["NO","NO"]], v=>{F.rptFiled=v;saveForm();});
+  injBody.appendChild(rptSel);
+
+  injCard.appendChild(injTitle);
+  injCard.appendChild(injBody);
+  wrap.appendChild(injCard);
+
+  // ── Report Signature — touch/mouse canvas pad ────────────
+  const sigCard = document.createElement('div');
+  sigCard.className = 'card';
+  const sigTitle = document.createElement('div');
+  sigTitle.className = 'card-title';
+  sigTitle.textContent = 'Report Signature';
+  const sigBody = document.createElement('div');
+  sigBody.className = 'card-body';
+
+  const sigLbl = document.createElement('div');
+  sigLbl.className = 'lbl';
+  sigLbl.style.marginBottom = '4px';
+  sigLbl.textContent = 'Report By';
+  sigBody.appendChild(sigLbl);
+
+  // Roster dropdown to select who is signing
+  const sigPersOpts = [["","— Select from Roster —"], ...PERSONNEL.map(p=>[p.badge, p.name + ' (Badge ' + p.badge + ')'])];
+  const sigPersSel = sel(F.reportBy||'', sigPersOpts, v => {
+    F.reportBy = v; saveForm();
+    // show selected name above canvas
+    const found = PERSONNEL.find(p=>p.badge===v);
+    sigNameDisplay.textContent = found ? found.name + ' — Badge ' + found.badge : '';
+  });
+  sigPersSel.style.marginBottom = '10px';
+  sigBody.appendChild(sigPersSel);
+
+  const sigNameDisplay = document.createElement('div');
+  sigNameDisplay.style.cssText = 'font-size:13px;font-weight:600;color:#8b0000;margin-bottom:6px;min-height:18px';
+  const sigFound = PERSONNEL.find(p=>p.badge===F.reportBy);
+  sigNameDisplay.textContent = sigFound ? sigFound.name + ' — Badge ' + sigFound.badge : '';
+  sigBody.appendChild(sigNameDisplay);
+
+  const sigDrawLbl = document.createElement('div');
+  sigDrawLbl.className = 'lbl';
+  sigDrawLbl.style.marginBottom = '6px';
+  sigDrawLbl.textContent = 'Sign below with your finger or stylus';
+  sigBody.appendChild(sigDrawLbl);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 580;
+  canvas.height = 140;
+  Object.assign(canvas.style, {
+    width:'100%', height:'140px', border:'1.5px solid #c8a97a',
+    borderRadius:'8px', background:'#fff8f0', display:'block',
+    touchAction:'none', cursor:'crosshair'
+  });
+
+  // Restore saved signature if any
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    // Canvas not supported in this environment — show text fallback
+    const fallback = document.createElement('div');
+    fallback.style.cssText = 'padding:12px;background:#f5ede0;border:1.5px solid #c8a97a;border-radius:8px;font-size:13px;color:#888';
+    fallback.textContent = 'Signature pad not available in this environment. Sign on the printed form.';
+    sigBody.appendChild(fallback);
+    sigCard.appendChild(sigTitle);
+    sigCard.appendChild(sigBody);
+    wrap.appendChild(sigCard);
+    return wrap;
+  }
+
+  if (F.signature) {
+    const img = new Image();
+    img.onload = () => { const c = canvas.getContext('2d'); if(c) c.drawImage(img,0,0); };
+    img.src = F.signature;
+  }
+
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  let drawing = false;
+  let lastX = 0, lastY = 0;
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches ? e.touches[0] : e;
+    return [(src.clientX - r.left) * scaleX, (src.clientY - r.top) * scaleY];
+  }
+
+  canvas.addEventListener('mousedown',  e => { drawing=true; [lastX,lastY]=getPos(e); });
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; [lastX,lastY]=getPos(e); }, {passive:false});
+
+  function draw(e) {
+    if (!drawing) return;
+    e.preventDefault && e.preventDefault();
+    const [x,y] = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lastX,lastY);
+    ctx.lineTo(x,y);
+    ctx.stroke();
+    [lastX,lastY] = [x,y];
+  }
+  canvas.addEventListener('mousemove',  draw);
+  canvas.addEventListener('touchmove',  draw, {passive:false});
+
+  function stopDraw() {
+    if (!drawing) return;
+    drawing = false;
+    F.signature = canvas.toDataURL();
+    saveForm();
+  }
+  canvas.addEventListener('mouseup',   stopDraw);
+  canvas.addEventListener('mouseleave',stopDraw);
+  canvas.addEventListener('touchend',  stopDraw);
+
+  sigBody.appendChild(canvas);
+
+  // Clear button
+  const clearSig = document.createElement('button');
+  clearSig.textContent = '✕ Clear Signature';
+  clearSig.style.cssText = 'margin-top:8px;background:none;border:1.5px solid #c8a97a;border-radius:6px;padding:6px 14px;font-size:13px;color:#8b0000;cursor:pointer;font-family:Georgia,serif';
+  clearSig.addEventListener('click', () => {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    F.signature = '';
+    saveForm();
+  });
+  sigBody.appendChild(clearSig);
+
+  sigCard.appendChild(sigTitle);
+  sigCard.appendChild(sigBody);
+  wrap.appendChild(sigCard);
+
+  return wrap;
+}
+
+function tabPreview() {
+  const selCount = PERSONNEL.filter(p=>F.personnel[p.badge]).length;
+  const dispEntry = [...DISPATCH_TYPES,...DISPATCH_SPECIAL].find(d=>d.code===F.dispType);
+  const locEntry = LOCATIONS.find(l=>l.code===F.locCode);
+  const icName = (PERSONNEL.find(p=>p.badge===F.ic)||{name:F.ic||'—'}).name;
+  const autoEmt = PERSONNEL.filter(p=>F.personnel[p.badge]&&p.qual&&p.qual.includes('emt')).length;
+  const autoInt = PERSONNEL.filter(p=>F.personnel[p.badge]&&p.qual&&p.qual.includes('int')).length;
+
+  // Calculate call time
+  function parseMin(t) {
+    if (!t) return null;
+    const p = t.split(':');
+    const h = parseInt(p[0]||0), m = parseInt(p[1]||0);
+    return isNaN(h)||isNaN(m) ? null : h*60+m;
+  }
+  const tDisp = parseMin(F.disp), tInQ = parseMin(F.inQ);
+  let callMins = null;
+  if (tDisp !== null && tInQ !== null) { callMins = tInQ - tDisp; if (callMins < 0) callMins += 1440; }
+  const totalPers = parseInt(F.totalCt) || selCount;
+  const persHours = callMins !== null && totalPers > 0 ? ((callMins * totalPers) / 60).toFixed(1) : null;
+
+  const wrap = document.createElement('div');
+
+  // Summary card built with DOM (no nested template literals)
+  const summary = document.createElement('div');
+  summary.id = 'preview-summary';
+  const rows = [
+    ['Run #', F.runNum||'—', 'Date', F.date||'—'],
+    ['IC', icName],
+    ['Dispatch → Arr → Clear', (F.disp||'—') + ' → ' + (F.arrived||'—') + ' → ' + (F.clear||'—')],
+    ['Type', dispEntry ? dispEntry.label + (F.dispDetail ? ' – ' + F.dispDetail : '') : '—'],
+    ['Location', locEntry ? locEntry.code + ' ' + locEntry.label : '—'],
+    ['Address', F.address||'—'],
+    ['Apparatus', APPARATUS.filter(a=>F.apparatus[a]).join(', ')||'None'],
+    ['Personnel', selCount + ' selected · EMTs ' + (F.emtCt||autoEmt) + ' · Interior ' + (F.intCt||autoInt) + ' · Total ' + (F.totalCt||selCount)],
+    ['Call Time', callMins !== null ? Math.floor(callMins/60) + 'h ' + (callMins%60) + 'm' : '—',
+     'Personnel Hours', persHours !== null ? persHours + ' hrs' : '—'],
+  ];
+
+  const title = document.createElement('div');
+  title.className = 'ps-title';
+  title.textContent = 'AURELIUS FIRE AND RESCUE — Summary';
+  summary.appendChild(title);
+
+  for (const row of rows) {
+    const d = document.createElement('div');
+    d.style.marginBottom = '2px';
+    for (let i = 0; i < row.length; i += 2) {
+      const b = document.createElement('b');
+      b.textContent = row[i] + ': ';
+      d.appendChild(b);
+      d.appendChild(document.createTextNode(row[i+1] || ''));
+      if (i + 2 < row.length) d.appendChild(document.createTextNode(' \u00a0 '));
+    }
+    summary.appendChild(d);
+  }
+
+  const ambList = (F.amb||[]).filter(a=>a.svc).map(a=>a.svc==='Other'?a.custom||'Other':a.svc);
+  if (ambList.length) {
+    const d = document.createElement('div');
+    const b = document.createElement('b');
+    b.textContent = 'Ambulance: ';
+    d.appendChild(b);
+    d.appendChild(document.createTextNode(ambList.join(', ')));
+    summary.appendChild(d);
+  }
+  if (F.remarks) {
+    const d = document.createElement('div');
+    const b = document.createElement('b');
+    b.textContent = 'Remarks: ';
+    d.appendChild(b);
+    d.appendChild(document.createTextNode(F.remarks.slice(0,100) + (F.remarks.length>100?'…':'')));
+    summary.appendChild(d);
+  }
+
+  wrap.appendChild(card('Ready to Print', summary));
+
+  const btn = document.createElement('button');
+  btn.className = 'btn-print';
+  btn.textContent = '📄 Generate & Download PDF';
+  btn.addEventListener('click', generatePDF);
+  wrap.appendChild(btn);
+
+  const btnShare = document.createElement('button');
+  btnShare.className = 'btn-print';
+  btnShare.textContent = '✉️ Generate PDF & Send via Email';
+  btnShare.style.background = '#1a4a8a';
+  btnShare.style.marginTop = '0';
+  btnShare.addEventListener('click', generateAndShare);
+  wrap.appendChild(btnShare);
+
+  const btn2 = document.createElement('button');
+  btn2.className = 'btn-print';
+  btn2.textContent = '🖨 Download Blank Form (Print & Fill by Hand)';
+  btn2.style.background = '#555';
+  btn2.style.marginTop = '0';
+  btn2.addEventListener('click', generateBlankPDF);
+  wrap.appendChild(btn2);
+
+  return wrap;
+}
+
+// ══════════════════════════════
+// PDF GENERATION
+// ══════════════════════════════
+function chkHtml(on) {
+  return `<span class="chkbox${on?' on':''}">${on?'X':''}</span>`;
+}
+function ambName(a) {
+  return a.svc === 'Other' ? (a.custom||'Other') : a.svc;
+}
+
+function timeDiffStr(t1, t2) {
+  if (!t1 || !t2) return '';
+  const parse = t => { const p=t.split(':'); return parseInt(p[0]||0)*60+parseInt(p[1]||0); };
+  let d = parse(t2) - parse(t1);
+  if (d < 0) d += 1440;
+  return d > 0 ? `+${d} min` : '';
+}
+
+// ── Shared print styles ──────────────────────────────────
+const PRINT_STYLES = ``;  // keep var for blank form compat, real styles inline now
+
+function buildPrintHTML() {
+  function parseMin(t) {
+    if (!t) return null;
+    const p = t.split(':');
+    const h = parseInt(p[0]||0), m = parseInt(p[1]||0);
+    return isNaN(h)||isNaN(m) ? null : h*60+m;
+  }
+  function fmtDur(m) {
+    if (m===null||m<0) return '—';
+    const h=Math.floor(m/60),mn=m%60;
+    return h>0?`${h}h ${mn}m`:`${mn} min`;
+  }
+
+  const selPers   = PERSONNEL.filter(p => F.personnel[p.badge]);
+  const autoEmt   = selPers.filter(p => p.qual&&p.qual.includes('emt')).length;
+  const autoInt   = selPers.filter(p => p.qual&&p.qual.includes('int')).length;
+  const totalPers = parseInt(F.totalCt)||selPers.length;
+  const dispEntry = [...DISPATCH_TYPES,...DISPATCH_SPECIAL].find(d=>d.code===F.dispType);
+  const locEntry  = LOCATIONS.find(l=>l.code===F.locCode);
+  const icPerson  = PERSONNEL.find(p=>p.badge===F.ic);
+  const icName    = icPerson ? `${icPerson.name} #${icPerson.badge}` : (F.ic||'—');
+  const sigPerson = PERSONNEL.find(p=>p.badge===F.reportBy);
+  const sigName   = sigPerson ? `${sigPerson.name} #${sigPerson.badge}` : '';
+  const filledCars= F.cars.filter(c=>c.model||c.plate||c.color);
+  const usedAmbs  = F.amb.filter(a=>a.svc);
+  const usedLaw   = F.law.filter(l=>l&&l.trim()).map(l=>{const pts=l.split('||');return pts[0]+(pts[1]?' — '+pts[1]:'');});
+  const usedRef   = (F.refusedPcr||[]).filter(p=>p.trim());
+  const mutList   = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
+  const activeApp = APPARATUS.filter(a=>F.apparatus[a]);
+  const dispText  = dispEntry ? dispEntry.label+(F.dispDetail?' '+F.dispDetail:'') : '—';
+
+  const tDisp=parseMin(F.disp), tInQ=parseMin(F.inQ);
+  let callMins=null;
+  if(tDisp!==null&&tInQ!==null){callMins=tInQ-tDisp;if(callMins<0)callMins+=1440;}
+  const persHours = callMins!==null&&totalPers>0 ? ((callMins*totalPers)/60).toFixed(1) : null;
+
+  const S = `
+  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Open Sans',Arial,sans-serif;font-size:7.5pt;color:#1a1a1a;background:white}
+  @page{size:letter portrait;margin:0}
+  .pg{width:8.5in;min-height:11in;padding:0.25in 0.35in 0.28in;position:relative;background:white}
+  .hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #8b0000;padding-bottom:4px;margin-bottom:7px}
+  .hn{font-size:11pt;font-weight:700;color:#8b0000;letter-spacing:.02em;line-height:1}
+  .hs{font-size:6.5pt;color:#888;margin-top:1px}
+  .hr{text-align:right}
+  .hrn{font-size:10pt;font-weight:700;display:block}
+  .hrd{font-size:7pt;color:#555}
+  .sec{font-size:5.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8b0000;border-bottom:1px solid #8b0000;padding-bottom:1px;margin:6px 0 3px}
+  .irow{display:flex;border:1px solid #ddd;border-radius:3px;margin-bottom:4px;overflow:hidden}
+  .ic{flex:1;padding:3px 6px;border-right:1px solid #ddd}
+  .ic:last-child{border-right:none}
+  .il{font-size:5pt;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.05em;display:block}
+  .iv{font-size:8pt;font-weight:600;display:block;line-height:1.2}
+  .trow{display:flex;border:1px solid #ddd;border-radius:3px;overflow:hidden;margin-bottom:4px}
+  .tc{flex:1;padding:3px 4px;border-right:1px solid #ddd;text-align:center}
+  .tc:last-child{border-right:none}
+  .tl{font-size:5pt;font-weight:700;color:#8b0000;text-transform:uppercase;display:block}
+  .tv{font-size:9pt;font-weight:700;display:block}
+  .td{font-size:5.5pt;color:#2d6a2d;font-weight:600;display:block}
+  .tcol{display:flex;gap:8px;margin-bottom:4px}
+  .col{flex:1}
+  .tags{display:flex;flex-wrap:wrap;gap:2px}
+  .tag{background:#f5ede0;border:1px solid #d4a96a;border-radius:2px;padding:1px 5px;font-size:6.5pt;font-weight:600;color:#5a3000}
+  .thi{background:#8b0000;border-color:#8b0000;color:white}
+  .dt{width:100%;border-collapse:collapse;margin-bottom:4px}
+  .dt th{background:#f5ede0;font-size:5.5pt;font-weight:700;text-transform:uppercase;color:#8b0000;padding:2px 5px;border:1px solid #ddd}
+  .dt td{font-size:7pt;padding:2px 5px;border:1px solid #ddd}
+  .dt tr:nth-child(even) td{background:#fafafa}
+  .rmk{border:1px solid #ddd;border-radius:3px;padding:4px 6px;min-height:32px;font-size:7.5pt;line-height:1.4;white-space:pre-wrap;background:#fafafa;margin-bottom:4px}
+  .kv{font-size:7pt;margin-bottom:3px}
+  .kv b{color:#8b0000}
+  .foot{position:absolute;bottom:0.15in;left:0.35in;right:0.35in;border-top:1px solid #ddd;padding-top:3px;display:flex;justify-content:space-between;font-size:6pt;color:#888}
+  .stat{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+  .statbox{flex:1;min-width:80px;background:#f5ede0;border:1px solid #e0c9a6;border-radius:4px;padding:4px 7px}
+  .stl{font-size:5.5pt;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:1px}
+  .stv{font-size:13pt;font-weight:700;color:#1a1a1a;display:block;line-height:1}
+  `;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${S}</style></head><body>
+  <div class="pg">
+    <div class="hdr">
+      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Incident Run Report</div></div>
+      <div class="hr"><span class="hrn">${F.runNum||'—'}</span><span class="hrd">${F.date||'—'}</span></div>
+    </div>
+
+    <div class="sec">Incident</div>
+    <div class="irow">
+      <div class="ic" style="flex:1.3"><span class="il">Incident Commander</span><span class="iv">${icName}</span></div>
+      <div class="ic"><span class="il">Dispatch Type</span><span class="iv">${dispText}</span></div>
+      <div class="ic"><span class="il">Location</span><span class="iv">${locEntry?locEntry.label:'—'}</span></div>
+      <div class="ic" style="flex:2"><span class="il">Address</span><span class="iv">${F.address||'—'}</span></div>
+    </div>
+    ${F.dispActual?`<div class="kv" style="margin-bottom:4px"><b>Dispatch:</b> ${F.dispActual}</div>`:''}
+
+    <div class="sec">Response Times</div>
+    <div class="trow">
+      <div class="tc"><span class="tl">Dispatched</span><span class="tv">${F.disp||'—'}</span><span class="td">&nbsp;</span></div>
+      <div class="tc"><span class="tl">Enroute</span><span class="tv">${F.enroute||'—'}</span><span class="td">${timeDiffStr(F.disp,F.enroute)||'&nbsp;'}</span></div>
+      <div class="tc"><span class="tl">Arrived</span><span class="tv">${F.arrived||'—'}</span><span class="td">${timeDiffStr(F.enroute,F.arrived)||'&nbsp;'}</span></div>
+      <div class="tc"><span class="tl">Cleared</span><span class="tv">${F.clear||'—'}</span><span class="td">${timeDiffStr(F.arrived,F.clear)||'&nbsp;'}</span></div>
+      <div class="tc"><span class="tl">In Quarters</span><span class="tv">${F.inQ||'—'}</span><span class="td">${timeDiffStr(F.clear,F.inQ)||'&nbsp;'}</span></div>
+    </div>
+
+    <div class="stat">
+      <div class="statbox"><span class="stl">Total Call Time</span><span class="stv">${callMins!==null?fmtDur(callMins):'—'}</span></div>
+      <div class="statbox"><span class="stl">Personnel on Scene</span><span class="stv">${totalPers}</span></div>
+      <div class="statbox"><span class="stl">Total Personnel Hours</span><span class="stv">${persHours!==null?persHours+' hrs':'—'}</span></div>
+      <div class="statbox"><span class="stl">EMTs</span><span class="stv">${F.emtCt||autoEmt}</span></div>
+      <div class="statbox"><span class="stl">Interior FF</span><span class="stv">${F.intCt||autoInt}</span></div>
+    </div>
+
+    <div class="tcol">
+      <div class="col">
+        <div class="sec">Apparatus Responding</div>
+        <div class="tags">
+          ${activeApp.length ? activeApp.map(a=>{
+            const dB=(F.apparatusDriver||{})[a];
+            const dP=dB?PERSONNEL.find(p=>p.badge===dB):null;
+            const dStr=dP?` · ${dP.name} #${dP.badge}`:'';
+            return `<div class="tag thi" style="font-size:6.5pt">${a}${dStr}</div>`;
+          }).join('') : '<span style="color:#aaa;font-size:7pt">None</span>'}
+        </div>
+      </div>
+      <div class="col">
+        <div class="sec">Personnel on Scene</div>
+        <div class="tags">
+          ${selPers.length ? selPers.map(p=>`<div class="tag" style="font-size:6.5pt">${p.name}${p.qual?' <i style="opacity:.7">${p.qual}</i>':''}</div>`).join('')
+            : '<span style="color:#aaa;font-size:7pt">None selected</span>'}
+        </div>
+      </div>
+    </div>
+
+    ${filledCars.length?`
+    <div class="sec">Vehicles Involved</div>
+    <table class="dt"><thead><tr><th>#</th><th>Year / Make / Model</th><th>Plate</th><th>Color</th></tr></thead>
+    <tbody>${filledCars.map((c,i)=>`<tr><td style="width:16px;text-align:center;font-weight:700">${i+1}</td><td>${c.model||'—'}</td><td>${c.plate||'—'}</td><td>${c.color||'—'}</td></tr>`).join('')}</tbody>
+    </table>`:''}
+
+    ${usedLaw.length||usedAmbs.length?`
+    <div class="tcol">
+      ${usedLaw.length?`<div class="col"><div class="sec">Law Enforcement</div>${usedLaw.map(l=>`<div class="kv">• ${l}</div>`).join('')}</div>`:''}
+      ${usedAmbs.length?`<div class="col"><div class="sec">EMS / Ambulances</div>
+        <table class="dt"><thead><tr><th>#</th><th>Service</th><th>PCR #</th></tr></thead>
+        <tbody>${usedAmbs.map((a,i)=>`<tr><td style="width:14px;text-align:center;font-weight:700">${i+1}</td><td>${ambName(a)||'—'}</td><td>${a.pcr||'—'}</td></tr>`).join('')}</tbody></table>
+        ${usedRef.length?`<div class="kv"><b>Refused PCR:</b> ${usedRef.join(', ')}</div>`:''}
+      </div>`:''}
+    </div>`:''}
+
+    ${mutList.length?`<div class="kv"><b>Mutual Aid ${F.mutualDir?'('+F.mutualDir+')':''}:</b> ${mutList.join(', ')}</div>`:''}
+
+    <div class="sec">Remarks</div>
+    <div class="rmk">${F.remarks||'&nbsp;'}</div>
+
+    ${F.injName?`<div class="kv" style="padding:3px 6px;background:#fff3f3;border:1px solid #e0b0b0;border-radius:3px">
+      <b>Personnel Injured:</b> ${(PERSONNEL.find(p=>p.badge===F.injName)||{name:F.injName}).name} Badge:${F.injName} Report Filed:${F.rptFiled||'—'}
+    </div>`:''}
+
+    <div class="foot">
+      <span>Aurelius Fire &amp; Rescue — Run Report ${F.runNum||''}</span>
+      <span>IC: ${icName}</span>
+      <span>${F.signature
+        ? `${sigName} <img src="${F.signature}" style="height:20px;vertical-align:middle;border-bottom:1px solid #aaa;margin-left:4px">`
+        : sigName ? `Report by: ${sigName}` : 'Report by: ___________________________'
+      }</span>
+    </div>
+  </div>
+  </body></html>`;
+}
+
+function buildBlankFormHTML() {
+  // Personnel roster — 2 columns
+  const half = Math.ceil(PERSONNEL.length / 2);
+  let persRows = '';
+  for (let r = 0; r < half; r++) {
+    persRows += '<tr>';
+    for (let c = 0; c < 2; c++) {
+      const p = PERSONNEL[r + c * half];
+      persRows += p
+        ? `<td style="padding:4px 8px;border:1px solid #ddd;font-size:8.5pt;white-space:nowrap">
+            <span style="display:inline-block;width:11px;height:11px;border:1.5px solid #888;border-radius:2px;margin-right:6px;vertical-align:middle"></span>
+            ${p.name} <span style="color:#777;font-size:7.5pt">${p.badge}${p.qual?' — '+p.qual:''}</span>
+           </td>`
+        : '<td style="border:1px solid #ddd"></td>';
+    }
+    persRows += '</tr>';
+  }
+
+  const BS = `
+  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Open Sans',Arial,sans-serif;font-size:8.5pt;color:#1a1a1a;background:white}
+  @page{size:letter portrait;margin:0}
+  .page{width:8.5in;min-height:11in;padding:0.34in 0.42in 0.36in;position:relative;page-break-after:always;background:white}
+  .page:last-child{page-break-after:avoid}
+  .hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid #8b0000;padding-bottom:6px;margin-bottom:10px}
+  .hn{font-size:14pt;font-weight:700;color:#8b0000}
+  .hs{font-size:7.5pt;color:#888}
+  .hr{text-align:right}
+  .hrn{font-size:12pt;font-weight:700;display:block}
+  /* Section — never break after, keeps heading with content */
+  .sec{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8b0000;border-bottom:1.5px solid #8b0000;padding-bottom:2px;margin:10px 0 6px;page-break-after:avoid}
+  /* keep each block together */
+  .blk{page-break-inside:avoid}
+  .fl{font-size:6.5pt;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.06em;margin-top:6px;display:block;page-break-after:avoid}
+  .fline{border-bottom:1px solid #aaa;display:block;min-height:20px;margin-top:3px;page-break-inside:avoid}
+  .dt{width:100%;border-collapse:collapse;margin-bottom:8px;page-break-inside:avoid}
+  .dt th{background:#f5ede0;font-size:7pt;font-weight:700;text-transform:uppercase;color:#8b0000;padding:4px 8px;border:1px solid #ddd}
+  .dt td{font-size:8.5pt;padding:5px 8px;border:1px solid #ddd;min-height:22px}
+  .chk{display:inline-block;width:11px;height:11px;border:1.5px solid #888;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .foot{position:absolute;bottom:0.2in;left:0.42in;right:0.42in;border-top:1px solid #ddd;padding-top:5px;display:flex;justify-content:space-between;font-size:7pt;color:#888}
+  `;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${BS}</style></head><body>
+
+  <!-- ═══ PAGE 1 ═══ -->
+  <div class="page">
+    <div class="hdr">
+      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Incident Run Report</div></div>
+      <div class="hr"><span class="hrn">Run #: ___________</span><span>Date: ____________</span></div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Incident Information</div>
+      <div style="display:flex;gap:14px;margin-bottom:8px">
+        <div style="flex:1.5"><span class="fl">Incident Commander</span><span class="fline"></span></div>
+        <div style="flex:1"><span class="fl">Location</span><span class="fline"></span></div>
+        <div style="flex:2"><span class="fl">Address</span><span class="fline"></span></div>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Dispatch</div>
+      <span class="fl">Actual Dispatch Text</span><span class="fline" style="margin-bottom:6px"></span>
+      <div style="display:flex;gap:10px;margin-bottom:8px">
+        <div style="flex:1"><span class="fl">Dispatch Type</span><span class="fline"></span></div>
+        <div style="flex:1"><span class="fl">Mutual Aid — Given or Received</span><span class="fline"></span></div>
+        <div style="flex:1.5"><span class="fl">Mutual Aid Agency</span><span class="fline"></span></div>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Response Times</div>
+      <div style="display:flex;gap:5px;margin-bottom:8px">
+        ${['Dispatched','Enroute','Arrived','Cleared','In Quarters'].map(t=>`
+        <div style="flex:1;text-align:center;border:1px solid #ddd;border-radius:4px;padding:5px 4px">
+          <div style="font-size:6.5pt;font-weight:700;color:#8b0000;text-transform:uppercase">${t}</div>
+          <div style="border-bottom:1px solid #aaa;min-height:22px;margin-top:5px"></div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Apparatus Responding — check unit, write driver name and badge number</div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+        <tbody>
+          <tr>${APPARATUS.slice(0,5).map(a=>`<td style="border:1px solid #ddd;padding:5px 7px;font-size:8.5pt;width:20%">
+            <span class="chk"></span>${a}
+            <div style="border-bottom:1px solid #ddd;margin-top:8px;font-size:7pt;color:#aaa">driver / badge #</div>
+          </td>`).join('')}</tr>
+          <tr>${APPARATUS.slice(5).map(a=>`<td style="border:1px solid #ddd;padding:5px 7px;font-size:8.5pt;width:20%">
+            <span class="chk"></span>${a}
+            <div style="border-bottom:1px solid #ddd;margin-top:8px;font-size:7pt;color:#aaa">driver / badge #</div>
+          </td>`).join('')}</tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Vehicles Involved</div>
+      <table class="dt">
+        <thead><tr><th>#</th><th>Year / Make / Model</th><th>Plate #</th><th>Color</th></tr></thead>
+        <tbody>${[1,2,3,4,5,6].map(n=>`<tr><td style="width:22px;text-align:center;font-weight:700">${n}</td><td></td><td></td><td></td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Law Enforcement</div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px">
+        ${[1,2,3].map(n=>`<div style="display:flex;align-items:center;gap:10px;font-size:8.5pt">
+          <span style="font-weight:700;min-width:10px">${n}.</span>
+          <span style="flex:1.5;border-bottom:1px solid #aaa;min-height:18px"></span>
+          <span style="font-size:7.5pt;color:#999">Agency</span>
+          <span style="flex:1;border-bottom:1px solid #aaa;min-height:18px"></span>
+          <span style="font-size:7.5pt;color:#999">Officer / Badge</span>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">EMS / Ambulances</div>
+      <table class="dt">
+        <thead><tr><th>#</th><th>Service</th><th>PCR #</th></tr></thead>
+        <tbody>${[1,2,3].map(n=>`<tr><td style="width:22px;text-align:center;font-weight:700">${n}</td><td></td><td></td></tr>`).join('')}</tbody>
+      </table>
+      <div style="font-size:8.5pt;margin-bottom:8px">
+        <b style="color:#8b0000">Refused Transport PCR:</b>
+        <span style="display:inline-block;border-bottom:1px solid #aaa;width:220px;margin-left:8px;vertical-align:bottom"></span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span>Aurelius Fire &amp; Rescue</span><span>Page 1 of 3</span>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE 2 ═══ -->
+  <div class="page">
+    <div class="hdr">
+      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Run Report — Page 2</div></div>
+      <div class="hr"><span class="hrn">Run #: ___________</span><span>Date: ____________</span></div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Remarks — Cause of Incident, Damage, Insurance Carrier</div>
+      <div style="border:1px solid #ddd;border-radius:4px;min-height:90px;background:#fafafa;margin-bottom:10px"></div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Personnel Counts</div>
+      <div style="display:flex;gap:20px;margin-bottom:10px;font-size:9pt">
+        <span>EMTs: <span style="display:inline-block;border-bottom:1px solid #aaa;width:44px"></span></span>
+        <span>Interior FF: <span style="display:inline-block;border-bottom:1px solid #aaa;width:44px"></span></span>
+        <span>Total on Call: <span style="display:inline-block;border-bottom:1px solid #aaa;width:44px"></span></span>
+        <span>Total Call Time: <span style="display:inline-block;border-bottom:1px solid #aaa;width:60px"></span></span>
+        <span>Personnel Hours: <span style="display:inline-block;border-bottom:1px solid #aaa;width:60px"></span></span>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Personnel Injured</div>
+      <div style="display:flex;gap:14px;margin-bottom:10px">
+        <div style="flex:2"><span class="fl">Name</span><span class="fline"></span></div>
+        <div style="flex:1"><span class="fl">Badge #</span><span class="fline"></span></div>
+        <div style="flex:1"><span class="fl">Report Filed</span>
+          <div style="margin-top:5px;font-size:8.5pt"><span class="chk"></span>YES &nbsp; <span class="chk"></span>NO</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Signature</div>
+      <div style="display:flex;gap:14px;margin-bottom:10px">
+        <div style="flex:1.5"><span class="fl">Report By (print name)</span><span class="fline"></span></div>
+        <div style="flex:1"><span class="fl">Badge #</span><span class="fline"></span></div>
+        <div style="flex:2"><span class="fl">Signature</span><span class="fline" style="min-height:36px"></span></div>
+      </div>
+    </div>
+
+    <div class="blk">
+      <div class="sec">Additional Notes</div>
+      <div style="border:1px solid #ddd;border-radius:4px;min-height:140px;background:#fafafa;margin-bottom:10px"></div>
+    </div>
+
+    <div class="foot">
+      <span>Aurelius Fire &amp; Rescue</span><span>Page 2 of 3</span>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE 3 — Personnel Roster ═══ -->
+  <div class="page">
+    <div class="hdr">
+      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Personnel on Scene</div></div>
+      <div class="hr"><span class="hrn">Run #: ___________</span><span>Date: ____________</span></div>
+    </div>
+    <div class="sec">Personnel on Scene — check all responding members</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:12px"><tbody>${persRows}</tbody></table>
+    <div class="foot">
+      <span>Aurelius Fire &amp; Rescue</span><span>Page 3 of 3</span>
+    </div>
+  </div>
+
+  </body></html>`;
+}
+
+function generatePDF() {
+  if (typeof html2pdf === 'undefined') {
+    alert('PDF library not loaded. Please check your internet connection.');
+    return;
+  }
+  const container = document.getElementById('print-form');
+  container.innerHTML = buildPrintHTML();
+  container.style.display = 'block';
+  const fn = `AureliusRunReport_${(F.runNum||'').replace(/[^a-z0-9]/gi,'_')}_${(F.date||'').replace(/-/g,'')}.pdf`;
+  html2pdf().set({
+    margin: 0,
+    filename: fn,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'] }
+  }).from(container).save().then(() => { container.style.display = 'none'; });
+}
+
+function generateBlankPDF() {
+  if (typeof html2pdf === 'undefined') {
+    alert('PDF library not loaded. Please check your internet connection.');
+    return;
+  }
+  const container = document.getElementById('print-form');
+  container.innerHTML = buildBlankFormHTML();
+  container.style.display = 'block';
+  html2pdf().set({
+    margin: 0,
+    filename: 'AureliusRunReport_BLANK.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'] }
+  }).from(container).save().then(() => { container.style.display = 'none'; });
+}
+
+async function generateAndShare() {
+  if (typeof html2pdf === 'undefined') {
+    alert('PDF library not loaded. Please check your internet connection.');
+    return;
+  }
+
+  const fn = `AureliusRunReport_${(F.runNum||'').replace(/[^a-z0-9]/gi,'_')}_${(F.date||'').replace(/-/g,'')}.pdf`;
+
+  // Show a status message while generating
+  const statusEl = document.getElementById('share-status');
+  if (statusEl) { statusEl.textContent = '⏳ Generating PDF…'; statusEl.style.display = 'block'; }
+
+  const container = document.getElementById('print-form');
+  container.innerHTML = buildPrintHTML();
+  container.style.display = 'block';
+
+  try {
+    // Generate as blob instead of downloading directly
+    const pdfBlob = await html2pdf().set({
+      margin: 0,
+      filename: fn,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'] }
+    }).from(container).outputPdf('blob');
+
+    container.style.display = 'none';
+
+    const pdfFile = new File([pdfBlob], fn, { type: 'application/pdf' });
+
+    // Try Web Share API (iOS 15+ / Android Chrome) — supports file attachments
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      if (statusEl) statusEl.style.display = 'none';
+      await navigator.share({
+        title: `Run Report ${F.runNum||''} — ${F.date||''}`,
+        text: `Aurelius Fire & Rescue Run Report ${F.runNum||''} dated ${F.date||''}`,
+        files: [pdfFile]
+      });
+    }
+    // Fallback: try navigator.share without files (older devices), then open mail
+    else if (navigator.share) {
+      // Download the file first so user has it, then open share
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fn; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (statusEl) { statusEl.textContent = 'PDF downloaded. Opening email…'; }
+      setTimeout(() => {
+        window.location.href = `mailto:?subject=${encodeURIComponent('Run Report '+F.runNum+' — '+F.date)}&body=${encodeURIComponent('Aurelius Fire & Rescue Run Report attached.\n\nRun #: '+F.runNum+'\nDate: '+F.date+'\nIC: '+((PERSONNEL.find(p=>p.badge===F.ic)||{name:F.ic||''}).name))}`;
+        if (statusEl) statusEl.style.display = 'none';
+      }, 800);
+    }
+    // Last fallback: just download the PDF
+    else {
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fn; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (statusEl) { statusEl.textContent = '✓ PDF downloaded — attach it manually in your email app.'; }
+      setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 4000);
+    }
+  } catch(e) {
+    container.style.display = 'none';
+    if (e.name !== 'AbortError') { // AbortError = user cancelled share sheet, not an error
+      console.error('Share error:', e);
+      if (statusEl) { statusEl.textContent = 'Could not share. Try Download instead.'; }
+      setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 3000);
+    } else {
+      if (statusEl) statusEl.style.display = 'none';
+    }
+  }
+}
+
+  // Apparatus rows (5 per row) with driver name
+  let appRows = '';
+  for (let r=0; r<2; r++) {
+    const slice = APPARATUS.slice(r*5, r*5+5);
+    appRows += '<tr>' + slice.map(a => {
+      const active = !!F.apparatus[a];
+      const driverBadge = (F.apparatusDriver||{})[a];
+      const driverName = driverBadge ? (PERSONNEL.find(p=>p.badge===driverBadge)||{name:''}).name : '';
+      return `<td style="width:20%;font-weight:${active?'bold':'normal'};background:${active?'#eee':'#fff'}">
+        <div style="font-size:7.5pt;text-transform:uppercase">${a}</div>
+        <div style="border-bottom:1px solid #000;min-height:12pt;font-size:7pt">${driverName}</div>
+      </td>`;
+    }).join('') + '</tr>';
+  }
+
+  // Dispatch checkboxes (2 cols)
+  let dispHtml = '';
+  for (let i=0; i<DISPATCH_TYPES.length; i+=2) {
+    const d1 = DISPATCH_TYPES[i], d2 = DISPATCH_TYPES[i+1];
+    dispHtml += `<div class="disp-item">${chkHtml(F.dispType===d1.code)} ${d1.label}</div>`;
+    if (d2) dispHtml += `<div class="disp-item">${chkHtml(F.dispType===d2.code)} ${d2.label}</div>`;
+  }
+  for (const d of DISPATCH_SPECIAL) {
+    const detail = (F.dispType===d.code && F.dispDetail) ? ` ${F.dispDetail}` : '___________';
+    dispHtml += `<div class="disp-item full">${chkHtml(F.dispType===d.code)} ${d.label}${detail}</div>`;
+  }
+
+  // Location checkboxes (4 cols)
+  let locHtml = LOCATIONS.map(l =>
+    `<div class="loc-item">${chkHtml(F.locCode===l.code)} ${l.code} ${l.label}</div>`
+  ).join('');
+
+  // Personnel (2 cols)
+  let persHtml = PERSONNEL.map(p =>
+    `<div class="pers-item">${chkHtml(!!F.personnel[p.badge])}
+      <span style="font-weight:${F.personnel[p.badge]?'bold':'normal'}">${p.name}</span>
+      <span style="color:#555;font-size:7.5pt">&nbsp;${p.badge}${p.qual?' '+p.qual:''}</span>
+    </div>`
+  ).join('');
+
+  // Vehicle rows — only show filled ones, up to 6
+  const filledCars = (F.cars||[]).filter(c => c.model || c.plate || c.color);
+  let mvaRows = filledCars.length ? filledCars.map((c,i) =>
+    `<tr>
+      <td style="width:10%;font-size:7.5pt"><b>VEH #${i+1}</b></td>
+      <td style="font-size:7.5pt"><b>MODEL:</b> ${c.model||'&nbsp;'.repeat(28)}</td>
+      <td style="font-size:7.5pt"><b>PLATE#:</b> ${c.plate||'&nbsp;'.repeat(12)}</td>
+      <td style="font-size:7.5pt"><b>COLOR:</b> ${c.color||'&nbsp;'.repeat(10)}</td>
+    </tr>`
+  ).join('') : `<tr><td colspan="4" style="font-size:7.5pt;color:#aaa">No vehicles entered</td></tr>`;
+
+  // Ambulances — each with their own PCR #
+  const usedAmbs = F.amb.filter(a => a.svc);
+  let ambCells = F.amb.map((a,i) =>
+    `<td><b>${i+1}:</b> ${ambName(a)||'&nbsp;'.repeat(18)} &nbsp; <b>PCR#:</b> ${a.pcr||'___________'}</td>`
+  ).join('');
+
+  // Refused Transport PCR
+  const usedRefused = (F.refusedPcr||[]).filter(p=>p.trim());
+  const refusedLine = usedRefused.length
+    ? usedRefused.map((p,i)=>`<b>Refused PCR #${i+1}:</b> ${p}`).join(' &nbsp;|&nbsp; ')
+    : '';
+
+  // Law — stored as "Agency||Detail", print as "Agency — Detail"
+  let lawCells = F.law.map((l,i) => {
+    if (!l) return `<td><b>${i+1}:</b> ${'&nbsp;'.repeat(30)}</td>`;
+    const parts = l.split('||');
+    const display = parts[0] + (parts[1] ? ' — ' + parts[1] : '');
+    return `<td><b>${i+1}:</b> ${display}</td>`;
+  }).join('');
+
+
+
+// ══════════════════════════════
+// RENDER
+// ══════════════════════════════
+function updateHeader() {
+  document.getElementById('header-sub').textContent =
+    `#${F.runNum||'—'} · ${F.date||'No date set'}`;
+}
+
+function renderTabBar() {
+  const bar = document.getElementById('tab-bar');
+  bar.innerHTML = '';
+  TABS.forEach((t, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i===tab?' active':'');
+    btn.textContent = t;
+    btn.addEventListener('click', () => { tab=i; render(); });
+    bar.appendChild(btn);
+  });
+}
+
+function renderTab() {
+  const tc = document.getElementById('tab-content');
+  tc.innerHTML = '';
+  const builders = [tabIncident,tabTimes,tabDispatch,tabApparatus,tabPersonnel,tabMVA,tabEMS,tabLaw,tabRemarks,tabPreview];
+  try {
+    tc.appendChild(builders[tab]());
+  } catch(e) {
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'background:#fff0f0;border:2px solid #c00;border-radius:8px;padding:16px;margin:14px;font-family:monospace;font-size:13px;color:#c00;white-space:pre-wrap';
+    errDiv.textContent = 'TAB ERROR [' + TABS[tab] + ']:\n' + e.message + '\n\n' + (e.stack||'').split('\n').slice(0,6).join('\n');
+    tc.appendChild(errDiv);
+    console.error('renderTab error on tab', TABS[tab], e);
+  }
+}
+
+function renderNav() {
+  const nav = document.getElementById('nav-row');
+  nav.innerHTML = '';
+  if (tab > 0) {
+    const back = document.createElement('button');
+    back.className = 'btn-back';
+    back.textContent = '← Back';
+    back.addEventListener('click', () => { tab--; render(); });
+    nav.appendChild(back);
+  }
+  if (tab < TABS.length-1) {
+    const next = document.createElement('button');
+    next.className = 'btn-next';
+    next.textContent = 'Next →';
+    next.addEventListener('click', () => { tab++; render(); });
+    nav.appendChild(next);
+  }
+}
+
+function render() {
+  updateHeader();
+  renderTabBar();
+  renderTab();
+  renderNav();
+}
+
+// ── Reload personnel roster on demand ──────────────────
+async function reloadPersonnel() {
+  const btn = document.getElementById('reload-btn');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Loading…';
+  btn.disabled = true;
+  try {
+    await loadPersonnel();
+    btn.textContent = '✓ Updated!';
+    btn.style.background = 'rgba(45,106,45,0.7)';
+    // Re-render current tab in case Personnel tab is open
+    renderTab();
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.background = 'rgba(255,255,255,0.15)';
+      btn.disabled = false;
+    }, 2000);
+  } catch(e) {
+    btn.textContent = '✗ Failed';
+    btn.style.background = 'rgba(139,0,0,0.5)';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.background = 'rgba(255,255,255,0.15)';
+      btn.disabled = false;
+    }, 2500);
+  }
+}
+
+// Boot immediately with built-in roster — don't wait for fetch
+PERSONNEL = [...PERSONNEL_FALLBACK];
+F = loadForm();
+render();
+
+// Then try to load updated personnel.json in background
+fetch('personnel.json?v=' + Date.now())
+  .then(r => r.ok ? r.json() : Promise.reject('not ok'))
+  .then(data => {
+    if (Array.isArray(data) && data.length > 0) {
+      PERSONNEL = data.map(p => ({
+        name: String(p.name||'').trim(),
+        badge: String(p.badge||'').trim(),
+        qual: String(p.qual||'').trim().toLowerCase(),
+      })).filter(p => p.name && p.badge);
+      PERSONNEL.sort((a,b) => a.name.localeCompare(b.name));
+      // Silently re-render current tab to pick up updated roster
+      renderTab();
+      document.getElementById('header-sub').textContent =
+        '#' + (F.runNum||'—') + ' · ' + (F.date||'No date set');
+    }
+  })
+  .catch(() => { /* stay with built-in fallback */ });
+</script>
+</body>
+</html>

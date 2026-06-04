@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aurelius F&R — Personnel Manager</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;background:#f5ede0;min-height:100vh;font-size:15px}
+    button{cursor:pointer;font-family:Arial,sans-serif}
+
+    /* ── Header ── */
+    header{background:linear-gradient(135deg,#8b0000,#5a0000);color:#fff;padding:16px 20px 14px}
+    header h1{font-size:20px;font-weight:700}
+    header p{font-size:12px;opacity:.7;margin-top:3px}
+
+    .container{max-width:820px;margin:0 auto;padding:16px}
+
+    /* ── Status bar ── */
+    #status{padding:12px 16px;font-size:13px;font-weight:600;border-radius:8px;margin-bottom:14px;display:none;animation:fadein .2s}
+    #status.ok {background:#d4edda;color:#155724;border:1.5px solid #b8dfc5;display:block}
+    #status.err{background:#f8d7da;color:#721c24;border:1.5px solid #f0b8bc;display:block}
+    @keyframes fadein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+    /* ── Sticky save bar ── */
+    #save-bar{
+      position:sticky;top:0;z-index:50;
+      background:#fff3cd;border-bottom:2px solid #ffc107;
+      padding:10px 16px;display:none;
+      align-items:center;justify-content:space-between;gap:10px;
+      font-size:13px;font-weight:600;color:#5a3e00;
+    }
+    #save-bar.visible{display:flex}
+    #save-bar .bar-btns{display:flex;gap:8px}
+
+    /* ── Buttons ── */
+    .btn{padding:10px 18px;border:none;border-radius:8px;font-size:14px;font-weight:600}
+    .btn-red   {background:#8b0000;color:#fff}
+    .btn-green {background:#2d6a2d;color:#fff}
+    .btn-blue  {background:#1a4a8a;color:#fff}
+    .btn-gray  {background:#555;color:#fff}
+    .btn-outline{background:#fff;color:#8b0000;border:2px solid #8b0000}
+    .btn-sm    {padding:6px 14px;font-size:13px}
+    .btn-icon  {padding:6px 10px;font-size:16px;border-radius:6px;border:none;background:none}
+
+    .actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px}
+
+    /* ── Table card ── */
+    .table-wrap{background:#fff;border-radius:10px;border:1.5px solid #e0c9a6;overflow:hidden;margin-bottom:16px}
+    .table-hdr{background:#8b0000;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+    table{width:100%;border-collapse:collapse}
+    th{background:#f5ede0;padding:9px 12px;text-align:left;font-size:11px;font-weight:700;color:#8b0000;border-bottom:2px solid #e0c9a6;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+    td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f0e8d8;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .row-num{color:#bbb;font-size:12px;width:30px;text-align:right}
+
+    /* ── Qual badges ── */
+    .qb{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap}
+    .q-emt {background:#d4edda;color:#155724}
+    .q-int {background:#cce5ff;color:#004085}
+    .q-both{background:#e2d9f3;color:#4a2080}
+    .q-none{background:#f0f0f0;color:#999}
+
+    /* ── Row action buttons ── */
+    .edit-btn{background:#1a4a8a;color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;margin-right:4px}
+    .del-btn {background:#8b0000;color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600}
+
+    /* ── Modal ── */
+    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+    #modal-overlay.open{display:flex}
+    #modal{background:#fff;border-radius:14px;width:100%;max-width:440px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.3)}
+    #modal-title{background:#8b0000;color:#fff;padding:14px 18px;font-size:16px;font-weight:700}
+    #modal-body{padding:20px 18px}
+    .modal-field{margin-bottom:16px}
+    .modal-field label{display:block;font-size:11px;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+    .modal-inp,.modal-sel{
+      width:100%;border:1.5px solid #c8a97a;border-radius:8px;
+      padding:11px 12px;font-size:16px;background:#fff8f0;
+      font-family:Arial,sans-serif;outline:none;color:#1a1a1a
+    }
+    .modal-inp:focus,.modal-sel:focus{border-color:#8b0000;background:#fff}
+    #modal-footer{padding:14px 18px;border-top:1px solid #f0e8d8;display:flex;gap:10px;justify-content:flex-end}
+
+    /* ── How-to card ── */
+    .howto{background:#fff;border-radius:10px;border:1.5px solid #e0c9a6;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.7}
+    .howto h3{font-size:14px;font-weight:700;color:#8b0000;margin-bottom:8px}
+    .howto ol{padding-left:18px}
+    .howto code{background:#f0e8d8;padding:1px 5px;border-radius:3px;font-family:monospace;font-size:12px}
+
+    /* ── Import box ── */
+    .import-box{background:#fff;border-radius:10px;border:1.5px solid #e0c9a6;padding:16px;margin-bottom:16px}
+    .import-box h3{font-size:14px;font-weight:700;color:#8b0000;margin-bottom:10px}
+    .drop-zone{border:2px dashed #c8a97a;border-radius:8px;padding:22px;text-align:center;color:#888;font-size:13px;cursor:pointer;transition:all .15s;margin-bottom:10px}
+    .drop-zone:hover,.drop-zone.over{background:#fff8f0;border-color:#8b0000;color:#8b0000}
+    .drop-zone input[type=file]{display:none}
+    textarea.csv-ta{width:100%;height:110px;border:1.5px solid #c8a97a;border-radius:6px;padding:8px;font-size:12px;font-family:monospace;background:#fff8f0;resize:vertical;margin-bottom:8px}
+
+    @media(max-width:500px){
+      .btn{padding:9px 12px;font-size:13px}
+      td,th{padding:8px 8px;font-size:13px}
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Edit Modal ── -->
+<div id="modal-overlay">
+  <div id="modal">
+    <div id="modal-title">Edit Member</div>
+    <div id="modal-body">
+      <div class="modal-field">
+        <label>Name (Last, First)</label>
+        <input id="m-name" class="modal-inp" type="text" placeholder="Smith, John" autocomplete="off"/>
+      </div>
+      <div class="modal-field">
+        <label>Badge #</label>
+        <input id="m-badge" class="modal-inp" type="text" inputmode="numeric" placeholder="42" autocomplete="off"/>
+      </div>
+      <div class="modal-field">
+        <label>Qualification</label>
+        <select id="m-qual" class="modal-sel">
+          <option value="">(None)</option>
+          <option value="int">INT — Interior Firefighter</option>
+          <option value="emt">EMT</option>
+          <option value="emt/int">EMT/INT — Both</option>
+        </select>
+      </div>
+    </div>
+    <div id="modal-footer">
+      <button class="btn btn-gray btn-sm" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-green btn-sm" onclick="saveModal()">✓ Save Member</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<header>
+  <h1>Aurelius Fire &amp; Rescue</h1>
+  <p>Personnel Manager — edit the roster then download and upload to GitHub</p>
+</header>
+
+<!-- ── Sticky unsaved-changes bar ── -->
+<div id="save-bar">
+  <span>⚠️ You have unsaved changes</span>
+  <div class="bar-btns">
+    <button class="btn btn-blue btn-sm" onclick="downloadJSON()">⬇ Download personnel.json</button>
+    <button class="btn btn-gray btn-sm" onclick="copyJSON()">📋 Copy JSON</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <div id="status"></div>
+
+  <!-- How it works -->
+  <div class="howto">
+    <h3>How to update the roster</h3>
+    <ol>
+      <li>Add, edit or delete members using the buttons in the table</li>
+      <li>Click <strong>Download personnel.json</strong> (or use the bar that appears at the top)</li>
+      <li>Go to your GitHub repo → click <code>personnel.json</code> → pencil icon → paste or upload the file → Commit</li>
+      <li>The run report app refreshes the roster automatically on next load</li>
+    </ol>
+    <br>
+    <strong>CSV import format:</strong> &nbsp;<code>Name,Badge,Qual</code> &nbsp; e.g. &nbsp;<code>Smith John,42,emt/int</code><br>
+    Qual values: <code>int</code> &nbsp;|&nbsp; <code>emt</code> &nbsp;|&nbsp; <code>emt/int</code> &nbsp;|&nbsp; leave blank
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-green" onclick="openModal(-1)">+ Add Member</button>
+    <button class="btn btn-blue" onclick="downloadJSON()">⬇ Download personnel.json</button>
+    <button class="btn btn-gray" onclick="copyJSON()">📋 Copy JSON</button>
+    <button class="btn btn-outline" onclick="document.getElementById('load-file-inp').click()">📂 Load JSON file</button>
+    <input type="file" id="load-file-inp" accept=".json" style="display:none" onchange="handleLoadFile(event)">
+  </div>
+
+  <!-- Roster table -->
+  <div class="table-wrap">
+    <div class="table-hdr">
+      <span>Roster — <span id="count">0</span> members</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="row-num">#</th>
+          <th>Name</th>
+          <th>Badge</th>
+          <th>Qualification</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="roster-body"></tbody>
+    </table>
+  </div>
+
+  <!-- CSV Import -->
+  <div class="import-box">
+    <h3>Import from CSV / Spreadsheet</h3>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('csv-file').click()">
+      <input type="file" id="csv-file" accept=".csv,.txt" onchange="handleCSVFile(event)">
+      📄 Drop a CSV file here, or tap to browse
+    </div>
+    <div style="font-size:12px;color:#888;margin-bottom:6px">— or paste CSV text below —</div>
+    <textarea class="csv-ta" id="csv-paste" placeholder="Name,Badge,Qual&#10;Smith John,42,emt/int&#10;Jones Mary,55,emt"></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-blue btn-sm" onclick="importCSV()">Import CSV</button>
+      <button class="btn btn-gray btn-sm" onclick="document.getElementById('csv-paste').value=''">Clear</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+let roster = [];
+let dirty = false;    // unsaved changes
+let editingIdx = -1;  // -1 = new row
+
+function markDirty() {
+  dirty = true;
+  document.getElementById('save-bar').classList.add('visible');
+}
+
+function markClean() {
+  dirty = false;
+  document.getElementById('save-bar').classList.remove('visible');
+}
+
+// ════════════════════════════════════════
+// STATUS
+// ════════════════════════════════════════
+function showStatus(msg, type='ok') {
+  const s = document.getElementById('status');
+  s.textContent = msg;
+  s.className = type;
+  clearTimeout(showStatus._t);
+  showStatus._t = setTimeout(() => { s.style.display='none'; }, 4000);
+}
+
+// ════════════════════════════════════════
+// TABLE RENDER
+// ════════════════════════════════════════
+function qualBadge(q) {
+  if (!q)           return `<span class="qb q-none">—</span>`;
+  if (q==='emt/int')return `<span class="qb q-both">EMT / INT</span>`;
+  if (q==='emt')    return `<span class="qb q-emt">EMT</span>`;
+  if (q==='int')    return `<span class="qb q-int">INT</span>`;
+  return `<span class="qb q-none">${q}</span>`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('roster-body');
+  tbody.innerHTML = '';
+  document.getElementById('count').textContent = roster.length;
+
+  if (roster.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">No members yet. Click + Add Member to get started.</td></tr>';
+    return;
+  }
+
+  roster.forEach((p, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="row-num">${i + 1}</td>
+      <td style="font-weight:600">${esc(p.name)}</td>
+      <td>${esc(p.badge)}</td>
+      <td>${qualBadge(p.qual)}</td>
+      <td style="white-space:nowrap">
+        <button class="edit-btn" onclick="openModal(${i})">✏ Edit</button>
+        <button class="del-btn"  onclick="deleteRow(${i})">🗑 Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════
+// MODAL — Add / Edit
+// ════════════════════════════════════════
+function openModal(idx) {
+  editingIdx = idx;
+  const overlay = document.getElementById('modal-overlay');
+  const title   = document.getElementById('modal-title');
+
+  if (idx === -1) {
+    // New member
+    title.textContent = 'Add New Member';
+    document.getElementById('m-name').value  = '';
+    document.getElementById('m-badge').value = '';
+    document.getElementById('m-qual').value  = '';
+  } else {
+    // Edit existing
+    title.textContent = 'Edit Member';
+    const p = roster[idx];
+    document.getElementById('m-name').value  = p.name;
+    document.getElementById('m-badge').value = p.badge;
+    document.getElementById('m-qual').value  = p.qual || '';
+  }
+
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('m-name').focus(), 80);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+function saveModal() {
+  const name  = document.getElementById('m-name').value.trim();
+  const badge = document.getElementById('m-badge').value.trim();
+  const qual  = document.getElementById('m-qual').value;
+
+  if (!name)  { document.getElementById('m-name').focus();  return; }
+  if (!badge) { document.getElementById('m-badge').focus(); return; }
+
+  if (editingIdx === -1) {
+    roster.push({ name, badge, qual });
+    roster.sort((a,b) => a.name.localeCompare(b.name));
+    showStatus(`Added: ${name}`);
+  } else {
+    roster[editingIdx] = { name, badge, qual };
+    roster.sort((a,b) => a.name.localeCompare(b.name));
+    showStatus(`Updated: ${name}`);
+  }
+
+  closeModal();
+  renderTable();
+  markDirty();
+}
+
+// Close modal on overlay click
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Enter key submits modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('modal-overlay').classList.contains('open')) {
+    saveModal();
+  }
+  if (e.key === 'Escape') closeModal();
+});
+
+// ════════════════════════════════════════
+// DELETE
+// ════════════════════════════════════════
+function deleteRow(i) {
+  const name = roster[i].name;
+  if (!confirm(`Remove "${name}" from the roster?`)) return;
+  roster.splice(i, 1);
+  renderTable();
+  markDirty();
+  showStatus(`Removed: ${name}`);
+}
+
+// ════════════════════════════════════════
+// JSON EXPORT
+// ════════════════════════════════════════
+function toJSON() {
+  return JSON.stringify(
+    roster.map(p => ({
+      name:  p.name.trim(),
+      badge: String(p.badge).trim(),
+      qual:  (p.qual || '').trim().toLowerCase(),
+    })),
+    null, 2
+  );
+}
+
+function downloadJSON() {
+  const blob = new Blob([toJSON()], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'personnel.json';
+  a.click();
+  markClean();
+  showStatus('✓ personnel.json downloaded. Upload it to your GitHub repo to go live.');
+}
+
+function copyJSON() {
+  const text = toJSON();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      markClean();
+      showStatus('✓ JSON copied to clipboard. Paste into personnel.json on GitHub.');
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  markClean();
+  showStatus('✓ JSON copied to clipboard.');
+}
+
+// ════════════════════════════════════════
+// LOAD JSON FILE
+// ════════════════════════════════════════
+function handleLoadFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('Expected a JSON array');
+      roster = data.map(p => ({
+        name:  String(p.name  || '').trim(),
+        badge: String(p.badge || '').trim(),
+        qual:  String(p.qual  || '').toLowerCase().trim(),
+      })).filter(p => p.name && p.badge);
+      roster.sort((a,b) => a.name.localeCompare(b.name));
+      renderTable();
+      markClean();
+      showStatus(`✓ Loaded ${roster.length} members from ${file.name}`);
+    } catch(err) {
+      showStatus('Error reading file: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// ════════════════════════════════════════
+// CSV IMPORT
+// ════════════════════════════════════════
+function handleCSVFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('csv-paste').value = ev.target.result;
+    showStatus('CSV loaded — review it and click Import CSV.');
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+function importCSV() {
+  const raw = document.getElementById('csv-paste').value.trim();
+  if (!raw) { showStatus('Paste CSV text first.', 'err'); return; }
+
+  const lines = raw.split(/\r?\n/).filter(l => l.trim());
+  const imported = [];
+  let skipped = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+    const clean = parts.map(p => p.trim().replace(/^["']|["']$/g, ''));
+
+    // Skip header row
+    if (i === 0 && /^name$/i.test(clean[0])) continue;
+
+    const name  = clean[0] || '';
+    const badge = clean[1] || '';
+    const qual  = (clean[2] || '').toLowerCase().replace(/[^a-z\/]/g, '');
+
+    if (!name || !badge) { skipped++; continue; }
+
+    const validQual = ['', 'int', 'emt', 'emt/int'].includes(qual) ? qual : '';
+    imported.push({ name, badge, qual: validQual });
+  }
+
+  if (imported.length === 0) {
+    showStatus('No valid rows found. Expected format: Name,Badge,Qual', 'err');
+    return;
+  }
+
+  if (roster.length > 0) {
+    const replace = confirm(
+      `Import ${imported.length} members.\n\nOK = Replace entire roster\nCancel = Add to existing roster`
+    );
+    roster = replace ? imported : [...roster, ...imported];
+  } else {
+    roster = imported;
+  }
+
+  roster.sort((a,b) => a.name.localeCompare(b.name));
+  renderTable();
+  markDirty();
+  showStatus(`✓ Imported ${imported.length} members${skipped > 0 ? `, skipped ${skipped} invalid rows` : ''}.`);
+}
+
+// Drag-and-drop on drop zone
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('csv-paste').value = ev.target.result;
+    showStatus('File dropped — click Import CSV to apply.');
+  };
+  reader.readAsText(file);
+});
+
+// ════════════════════════════════════════
+// BOOT — fetch current personnel.json
+// ════════════════════════════════════════
+fetch('personnel.json?v=' + Date.now())
+  .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+  .then(data => {
+    roster = data.map(p => ({
+      name:  String(p.name  || '').trim(),
+      badge: String(p.badge || '').trim(),
+      qual:  String(p.qual  || '').toLowerCase().trim(),
+    })).filter(p => p.name && p.badge);
+    roster.sort((a,b) => a.name.localeCompare(b.name));
+    renderTable();
+    showStatus(`✓ Loaded ${roster.length} members from personnel.json`);
+  })
+  .catch(() => {
+    renderTable();
+    showStatus('No personnel.json found — add members manually or import a CSV.', 'err');
+  });
+</script>
+</body>
+</html>

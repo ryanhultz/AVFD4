@@ -1,0 +1,8 @@
+/personnel.json
+  Cache-Control: no-cache, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/manage-personnel.html
+  Cache-Control: no-cache, must-revalidate
