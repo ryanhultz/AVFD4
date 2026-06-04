@@ -2000,6 +2000,7 @@ function buildPrintHTML() {
     var h=Math.floor(m/60),mn=m%60;
     return h>0?h+'h '+mn+'m':mn+' min';
   }
+
   var selPers   = PERSONNEL.filter(function(p){return F.personnel[p.badge];});
   var autoEmt   = selPers.filter(function(p){return p.qual&&p.qual.includes('emt');}).length;
   var autoInt   = selPers.filter(function(p){return p.qual&&p.qual.includes('int');}).length;
@@ -2023,221 +2024,231 @@ function buildPrintHTML() {
   var persHours = callMins!==null&&totalPers>0 ? ((callMins*totalPers)/60).toFixed(1) : null;
   var td=function(t1,t2){return timeDiffStr(t1,t2)||'';};
 
-  // ── Build section HTML strings ───────────────────────────
+  // ── Section header row ───────────────────────────────────
+  function secHdr(label) {
+    return '<tr><td colspan="99" style="background:#8b0000;color:#fff;font-size:6pt;'
+      +'font-weight:700;text-transform:uppercase;letter-spacing:.1em;'
+      +'padding:2px 6px">'+label+'</td></tr>';
+  }
 
-  // Apparatus table
-  var appHtml='';
+  // ── Apparatus ─────────────────────────────────────────────
+  var appRows='';
   if(activeApp.length){
     activeApp.forEach(function(a){
       var dB=(F.apparatusDriver||{})[a];
       var dP=dB?PERSONNEL.find(function(p){return p.badge===dB;}):null;
-      appHtml+='<tr>'
-        +'<td class="app-unit">'+a+'</td>'
-        +'<td class="app-driver">'+(dP?dP.name+' #'+dP.badge:'')+'</td>'
+      var dStr=dP?dP.name+' #'+dP.badge:'';
+      appRows+='<tr>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;font-weight:700;'
+        +'width:38%;background:#fafafa;">'+a+'</td>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;">'+dStr+'</td>'
         +'</tr>';
     });
   } else {
-    appHtml='<tr><td colspan="2" class="empty">None</td></tr>';
+    appRows='<tr><td colspan="2" style="padding:3px 6px;font-size:7pt;color:#aaa;border:1px solid #ddd">None</td></tr>';
   }
 
-  // Personnel table
-  var persHtml='';
+  // ── Personnel ─────────────────────────────────────────────
+  var persRows='';
   if(selPers.length){
     var half=Math.ceil(selPers.length/2);
     for(var r=0;r<half;r++){
       var p1=selPers[r], p2=selPers[r+half];
-      persHtml+='<tr>'
-        +'<td class="pers-cell">'+p1.name+' <span class="badge">#'+p1.badge+(p1.qual?' &middot; '+p1.qual.toUpperCase():'')+'</span></td>'
-        +'<td class="pers-cell">'+(p2?p2.name+' <span class="badge">#'+p2.badge+(p2.qual?' &middot; '+p2.qual.toUpperCase():'')+'</span>':'')+'</td>'
+      persRows+='<tr>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;width:50%">'
+        +p1.name+' <span style="color:#8b0000;font-size:6.5pt;font-weight:700">#'+p1.badge
+        +(p1.qual?' &middot; '+p1.qual.toUpperCase():'')+'</span></td>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;width:50%">'
+        +(p2?p2.name+' <span style="color:#8b0000;font-size:6.5pt;font-weight:700">#'+p2.badge
+        +(p2.qual?' &middot; '+p2.qual.toUpperCase():'')+'</span>':'')+'</td>'
         +'</tr>';
     }
   } else {
-    persHtml='<tr><td colspan="2" class="empty">None selected</td></tr>';
+    persRows='<tr><td colspan="2" style="padding:3px 6px;font-size:7pt;color:#aaa;border:1px solid #ddd">None selected</td></tr>';
   }
 
-  // Vehicles
-  var vehHtml='';
-  if(filledCars.length){
-    filledCars.forEach(function(c,i){
-      vehHtml+='<tr>'
-        +'<td class="veh-num">'+(i+1)+'</td>'
-        +'<td class="veh-cell">'+(c.model||'—')+'</td>'
-        +'<td class="veh-cell">'+(c.plate||'—')+'</td>'
-        +'<td class="veh-cell">'+(c.color||'—')+'</td>'
-        +'</tr>';
-    });
-  }
-
-  // Law + EMS inline
-  var lawHtml='', emsHtml='';
-  usedLaw.forEach(function(l,i){
-    lawHtml+='<div class="list-item"><span class="item-num">'+(i+1)+'</span>'+l+'</div>';
-  });
-  usedAmbs.forEach(function(a,i){
-    emsHtml+='<div class="list-item"><span class="item-num">'+(i+1)+'</span>'+ambName(a)
-      +(a.pcr?' &nbsp;<span class="badge">PCR '+a.pcr+'</span>':'')+'</div>';
-  });
-  if(usedRef.length) emsHtml+='<div style="font-size:6.5pt;margin-top:2px;color:#555"><strong>Refused:</strong> '+usedRef.join(', ')+'</div>';
-
-  var CSS = [
-    '@page{size:letter portrait;margin:0}',
-    'html,body{margin:0;padding:0;height:100%;background:#fff}',
+  var CSS=[
+    '*{box-sizing:border-box;margin:0;padding:0}',
+    'html,body{height:100%;background:#fff}',
     'body{font-family:Arial,Helvetica,sans-serif;font-size:7.5pt;color:#111;',
-      'display:flex;flex-direction:column}',
-    /* header */
-    '.hdr{background:#1a1a1a;color:#fff;padding:9px 16px;display:flex;',
-      'align-items:center;justify-content:space-between}',
-    '.hdr-dept{font-size:13pt;font-weight:700;letter-spacing:.03em}',
-    '.hdr-sub{font-size:6.5pt;color:#aaa;margin-top:1px}',
-    '.hdr-right{text-align:right}',
-    '.hdr-rn{font-size:11pt;font-weight:700;display:block}',
-    '.hdr-date{font-size:7pt;color:#ccc}',
-    /* accent bar */
-    '.accent{height:3px;background:repeating-linear-gradient(90deg,#555 0,#555 60%,#888 60%,#888 100%)}',
-    /* body wrap */
-    '.wrap{flex:1;display:flex;flex-direction:column;padding:9px 14px 8px;overflow:hidden}',
-    /* section label */
-    '.sec{font-size:5.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.12em;',
-      'color:#555;border-bottom:1px solid #ccc;padding-bottom:1px;margin:7px 0 3px}',
-    '.sec:first-child{margin-top:0}',
-    /* info row */
-    '.info-row{display:flex;gap:0;border:1px solid #ddd;margin-bottom:5px;border-radius:2px;overflow:hidden}',
-    '.info-cell{flex:1;padding:3px 7px;border-right:1px solid #ddd}',
-    '.info-cell:last-child{border-right:none}',
-    '.info-cell.wide{flex:2}',
-    '.info-lbl{font-size:5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;display:block;margin-bottom:1px}',
-    '.info-val{font-size:8pt;font-weight:700;display:block;line-height:1.2}',
-    /* time row */
-    '.time-row{display:flex;gap:0;border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:3px}',
-    '.time-cell{flex:1;text-align:center;padding:3px 3px;border-right:1px solid #ddd}',
-    '.time-cell:last-child{border-right:none}',
-    '.time-lbl{font-size:5pt;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;display:block}',
-    '.time-val{font-size:11pt;font-weight:700;display:block;line-height:1.1}',
-    '.time-diff{font-size:5.5pt;color:#555;display:block}',
-    /* stat chips */
-    '.stat-row{display:flex;gap:3px;margin-bottom:5px}',
-    '.stat{flex:1;border:1px solid #ddd;border-radius:2px;padding:3px 5px;border-top:2px solid #333}',
-    '.stat-lbl{font-size:5pt;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;display:block}',
-    '.stat-val{font-size:10pt;font-weight:700;display:block;line-height:1.1}',
-    /* two col */
-    '.two-col{display:flex;gap:8px;margin-bottom:5px}',
-    '.col{flex:1;overflow:hidden}',
-    '.col.narrow{flex:.9}',
-    /* tables */
+      'display:flex;flex-direction:column;}',
+    '@page{size:letter portrait;margin:0}',
     'table{border-collapse:collapse;width:100%}',
-    '.app-unit{font-size:7pt;font-weight:700;padding:2px 5px;border:1px solid #ddd;width:38%}',
-    '.app-driver{font-size:7pt;padding:2px 5px;border:1px solid #ddd;color:#333}',
-    '.pers-cell{font-size:7pt;padding:2px 5px;border:1px solid #eee;width:50%}',
-    '.badge{font-size:6pt;color:#666;font-weight:700}',
-    '.veh-num{font-size:7pt;font-weight:700;padding:2px 4px;border:1px solid #ddd;width:16px;text-align:center}',
-    '.veh-cell{font-size:7pt;padding:2px 5px;border:1px solid #ddd}',
-    /* law/ems lists */
-    '.list-item{font-size:7pt;padding:1px 0;border-bottom:1px solid #f0f0f0}',
-    '.item-num{display:inline-block;width:12px;font-weight:700;color:#888}',
-    /* remarks */
-    '#rmk{flex:1;border:1px solid #ddd;border-radius:2px;padding:5px 7px;',
-      'font-size:7.5pt;line-height:1.4;white-space:pre-wrap;min-height:24px;',
-      'background:#fafafa;margin-bottom:4px}',
-    /* injured */
-    '.injured{font-size:7pt;padding:3px 7px;border:1px solid #ddd;border-left:3px solid #555;',
-      'border-radius:2px;margin-bottom:4px}',
-    /* footer */
-    '.foot{background:#1a1a1a;color:#fff;padding:5px 14px;display:flex;',
-      'justify-content:space-between;align-items:center;flex-shrink:0}',
-    '.foot-txt{font-size:6pt;color:#aaa}',
-    '.foot-sig{font-size:6.5pt;text-align:right}',
-    '.empty{font-size:7pt;color:#aaa;padding:2px 5px}',
+    '.wrap{flex:1;display:flex;flex-direction:column;padding:10px 14px 8px}',
+    '#rmk{flex:1;border:1px solid #ddd;padding:5px 7px;font-size:7.5pt;',
+      'line-height:1.4;white-space:pre-wrap;min-height:20px;background:#fff}',
   ].join('');
 
-  var H = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+CSS+'</style></head><body>';
+  var H='<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+CSS+'</style></head><body>';
 
-  // HEADER
-  H += '<div class="hdr">';
-  H += '<div><div class="hdr-dept">AURELIUS FIRE &amp; RESCUE</div><div class="hdr-sub">Incident Run Report</div></div>';
-  H += '<div class="hdr-right"><span class="hdr-rn">'+( F.runNum||'—')+'</span><span class="hdr-date">'+(F.date||'—')+'</span></div>';
-  H += '</div><div class="accent"></div>';
+  // ══ HEADER ═══════════════════════════════════════════════
+  H+='<table style="background:#8b0000;padding:8px 14px 6px;width:100%"><tr>';
+  H+='<td style="color:#fff"><div style="font-size:15pt;font-weight:700;letter-spacing:.03em;line-height:1">AURELIUS FIRE &amp; RESCUE</div>';
+  H+='<div style="font-size:7pt;color:#ffcccc;margin-top:2px">Incident Run Report</div></td>';
+  H+='<td style="text-align:right;color:#fff;vertical-align:middle">';
+  H+='<div style="font-size:14pt;font-weight:700;">'+( F.runNum||'—')+'</div>';
+  H+='<div style="font-size:8pt;color:#ffcccc">'+(F.date||'—')+'</div>';
+  H+='</td></tr></table>';
 
-  // BODY WRAP
-  H += '<div class="wrap">';
+  H+='<div class="wrap">';
 
-  // INCIDENT
-  H += '<div class="sec">Incident</div>';
-  H += '<div class="info-row">';
-  H += '<div class="info-cell"><span class="info-lbl">Incident Commander</span><span class="info-val">'+icName+'</span></div>';
-  H += '<div class="info-cell"><span class="info-lbl">Dispatch Type</span><span class="info-val">'+dispText+'</span></div>';
-  H += '<div class="info-cell"><span class="info-lbl">Location</span><span class="info-val">'+(locEntry?locEntry.label:'—')+'</span></div>';
-  H += '<div class="info-cell wide"><span class="info-lbl">Address</span><span class="info-val">'+(F.address||'—')+'</span></div>';
-  H += '</div>';
-  if(F.dispActual) H += '<div style="font-size:7pt;color:#555;margin-bottom:4px;padding:2px 5px;border-left:2px solid #ccc"><em>Dispatch:</em> '+F.dispActual+'</div>';
+  // ══ INCIDENT INFO ════════════════════════════════════════
+  H+='<table style="margin-bottom:4px;border:1px solid #8b0000"><tbody>';
+  H+=secHdr('Incident Information');
+  H+='<tr>';
+  H+='<td style="padding:3px 7px;border:1px solid #ddd;width:28%">'
+    +'<span style="font-size:5.5pt;color:#8b0000;font-weight:700;display:block;text-transform:uppercase;letter-spacing:.06em">Incident Commander</span>'
+    +'<span style="font-size:8.5pt;font-weight:700">'+icName+'</span></td>';
+  H+='<td style="padding:3px 7px;border:1px solid #ddd;width:22%">'
+    +'<span style="font-size:5.5pt;color:#8b0000;font-weight:700;display:block;text-transform:uppercase;letter-spacing:.06em">Dispatch Type</span>'
+    +'<span style="font-size:8pt;font-weight:700">'+dispText+'</span></td>';
+  H+='<td style="padding:3px 7px;border:1px solid #ddd;width:16%">'
+    +'<span style="font-size:5.5pt;color:#8b0000;font-weight:700;display:block;text-transform:uppercase;letter-spacing:.06em">Location</span>'
+    +'<span style="font-size:8pt;font-weight:700">'+(locEntry?locEntry.label:'—')+'</span></td>';
+  H+='<td style="padding:3px 7px;border:1px solid #ddd;">'
+    +'<span style="font-size:5.5pt;color:#8b0000;font-weight:700;display:block;text-transform:uppercase;letter-spacing:.06em">Address</span>'
+    +'<span style="font-size:8pt;font-weight:700">'+(F.address||'—')+'</span></td>';
+  H+='</tr>';
+  if(F.dispActual){
+    H+='<tr><td colspan="4" style="padding:2px 7px;border:1px solid #ddd;font-size:7pt;color:#555">'
+      +'<strong>Dispatch:</strong> '+F.dispActual+'</td></tr>';
+  }
+  H+='</tbody></table>';
 
-  // TIMES
-  H += '<div class="sec">Response Times</div>';
-  H += '<div class="time-row">';
-  H += '<div class="time-cell"><span class="time-lbl">Dispatched</span><span class="time-val">'+(F.disp||'—')+'</span><span class="time-diff">&nbsp;</span></div>';
-  H += '<div class="time-cell"><span class="time-lbl">Enroute</span><span class="time-val">'+(F.enroute||'—')+'</span><span class="time-diff">'+td(F.disp,F.enroute)+'</span></div>';
-  H += '<div class="time-cell"><span class="time-lbl">Arrived</span><span class="time-val">'+(F.arrived||'—')+'</span><span class="time-diff">'+td(F.enroute,F.arrived)+'</span></div>';
-  H += '<div class="time-cell"><span class="time-lbl">Cleared</span><span class="time-val">'+(F.clear||'—')+'</span><span class="time-diff">'+td(F.arrived,F.clear)+'</span></div>';
-  H += '<div class="time-cell"><span class="time-lbl">In Quarters</span><span class="time-val">'+(F.inQ||'—')+'</span><span class="time-diff">'+td(F.clear,F.inQ)+'</span></div>';
-  H += '</div>';
+  // ══ TIMES ════════════════════════════════════════════════
+  H+='<table style="margin-bottom:4px;border:1px solid #8b0000"><tbody>';
+  H+=secHdr('Response Times');
+  H+='<tr>';
+  var times=[['Dispatched',F.disp,''],['Enroute',F.enroute,td(F.disp,F.enroute)],
+    ['Arrived',F.arrived,td(F.enroute,F.arrived)],['Cleared',F.clear,td(F.arrived,F.clear)],
+    ['In Quarters',F.inQ,td(F.clear,F.inQ)]];
+  times.forEach(function(t){
+    H+='<td style="text-align:center;padding:3px 4px;border:1px solid #ddd;width:20%">'
+      +'<div style="font-size:5.5pt;color:#8b0000;font-weight:700;text-transform:uppercase;letter-spacing:.05em">'+t[0]+'</div>'
+      +'<div style="font-size:12pt;font-weight:700;line-height:1.1">'+(t[1]||'—')+'</div>'
+      +'<div style="font-size:6pt;color:#555">'+t[2]+'</div>'
+      +'</td>';
+  });
+  H+='</tr>';
+  // Stats row inside same table
+  H+='<tr style="background:#fef9f9">';
+  var stats=[
+    ['Total Call Time', callMins!==null?fmtDur(callMins):'—'],
+    ['Personnel',String(totalPers)],
+    ['Personnel Hours', persHours!==null?persHours+' hrs':'—'],
+    ['EMTs', String(F.emtCt||autoEmt)],
+    ['Interior FF', String(F.intCt||autoInt)]
+  ];
+  stats.forEach(function(s){
+    H+='<td style="text-align:center;padding:3px 4px;border:1px solid #ddd">'
+      +'<div style="font-size:5.5pt;color:#8b0000;font-weight:700;text-transform:uppercase;letter-spacing:.05em">'+s[0]+'</div>'
+      +'<div style="font-size:9pt;font-weight:700">'+s[1]+'</div>'
+      +'</td>';
+  });
+  H+='</tr></tbody></table>';
 
-  // STATS
-  H += '<div class="stat-row">';
-  H += '<div class="stat"><span class="stat-lbl">Call Time</span><span class="stat-val">'+(callMins!==null?fmtDur(callMins):'—')+'</span></div>';
-  H += '<div class="stat"><span class="stat-lbl">Personnel</span><span class="stat-val">'+totalPers+'</span></div>';
-  H += '<div class="stat"><span class="stat-lbl">Pers. Hours</span><span class="stat-val">'+(persHours!==null?persHours:'—')+'</span></div>';
-  H += '<div class="stat"><span class="stat-lbl">EMTs</span><span class="stat-val">'+(F.emtCt||autoEmt)+'</span></div>';
-  H += '<div class="stat"><span class="stat-lbl">Interior FF</span><span class="stat-val">'+(F.intCt||autoInt)+'</span></div>';
-  H += '</div>';
+  // ══ APPARATUS + PERSONNEL ════════════════════════════════
+  H+='<table style="margin-bottom:4px"><tr valign="top">';
+  // Apparatus
+  H+='<td style="width:42%;padding-right:5px">';
+  H+='<table style="border:1px solid #8b0000"><tbody>';
+  H+=secHdr('Apparatus Responding');
+  H+=appRows;
+  H+='</tbody></table></td>';
+  // Personnel
+  H+='<td style="padding-left:5px">';
+  H+='<table style="border:1px solid #8b0000"><tbody>';
+  H+=secHdr('Personnel on Scene ('+selPers.length+')');
+  H+=persRows;
+  H+='</tbody></table></td>';
+  H+='</tr></table>';
 
-  // APPARATUS + PERSONNEL
-  H += '<div class="two-col">';
-  H += '<div class="col narrow"><div class="sec">Apparatus</div><table>'+appHtml+'</table></div>';
-  H += '<div class="col"><div class="sec">Personnel on Scene</div><table>'+persHtml+'</table></div>';
-  H += '</div>';
-
-  // VEHICLES
+  // ══ VEHICLES ═════════════════════════════════════════════
   if(filledCars.length){
-    H += '<div class="sec">Vehicles Involved</div>';
-    H += '<table style="margin-bottom:5px"><thead><tr>';
-    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">#</th>';
-    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">YEAR / MAKE / MODEL</th>';
-    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">PLATE</th>';
-    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">COLOR</th>';
-    H += '</tr></thead><tbody>'+vehHtml+'</tbody></table>';
+    H+='<table style="margin-bottom:4px;border:1px solid #8b0000"><tbody>';
+    H+=secHdr('Vehicles Involved');
+    H+='<tr style="background:#fafafa">'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000;width:18px">#</th>'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000">Year / Make / Model</th>'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000">Plate</th>'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000">Color</th>'
+      +'</tr>';
+    filledCars.forEach(function(c,i){
+      H+='<tr>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt;font-weight:700;text-align:center">'+(i+1)+'</td>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt">'+(c.model||'—')+'</td>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt">'+(c.plate||'—')+'</td>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt">'+(c.color||'—')+'</td>'
+        +'</tr>';
+    });
+    H+='</tbody></table>';
   }
 
-  // LAW + EMS
-  if(lawHtml||emsHtml){
-    H += '<div class="two-col">';
-    if(lawHtml) H += '<div class="col"><div class="sec">Law Enforcement</div>'+lawHtml+'</div>';
-    if(emsHtml) H += '<div class="col"><div class="sec">EMS / Ambulances</div>'+emsHtml+'</div>';
-    H += '</div>';
+  // ══ LAW + EMS ════════════════════════════════════════════
+  if(usedLaw.length||usedAmbs.length){
+    H+='<table style="margin-bottom:4px"><tr valign="top">';
+    if(usedLaw.length){
+      H+='<td style="width:50%;padding-right:5px">';
+      H+='<table style="border:1px solid #8b0000"><tbody>'+secHdr('Law Enforcement');
+      usedLaw.forEach(function(l,i){
+        H+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7pt">'
+          +'<span style="font-weight:700;color:#8b0000;margin-right:5px">'+(i+1)+'.</span>'+l+'</td></tr>';
+      });
+      H+='</tbody></table></td>';
+    }
+    if(usedAmbs.length){
+      H+='<td style="'+(usedLaw.length?'padding-left:5px':'')+'">';
+      H+='<table style="border:1px solid #8b0000"><tbody>'+secHdr('EMS / Ambulances');
+      H+='<tr style="background:#fafafa">'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000;width:18px">#</th>'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000">Service</th>'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;text-align:left;font-size:6pt;color:#8b0000">PCR #</th>'
+        +'</tr>';
+      usedAmbs.forEach(function(a,i){
+        H+='<tr>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt;font-weight:700;text-align:center">'+(i+1)+'</td>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt">'+(ambName(a)||'—')+'</td>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt">'+(a.pcr||'—')+'</td>'
+          +'</tr>';
+      });
+      H+='</tbody></table>';
+      if(usedRef.length) H+='<div style="font-size:7pt;padding:2px 4px;color:#555"><strong>Refused PCR:</strong> '+usedRef.join(', ')+'</div>';
+      H+='</td>';
+    }
+    H+='</tr></table>';
   }
 
-  // MUTUAL AID
-  if(mutList.length) H += '<div style="font-size:7pt;color:#555;margin-bottom:4px"><strong>Mutual Aid'+(F.mutualDir?' ('+F.mutualDir+')':"")+':</strong> '+mutList.join(' · ')+'</div>';
+  // ══ MUTUAL AID ═══════════════════════════════════════════
+  if(mutList.length){
+    H+='<div style="font-size:7pt;padding:2px 6px;margin-bottom:4px;border-left:3px solid #8b0000;color:#333">'
+      +'<strong>Mutual Aid'+(F.mutualDir?' ('+F.mutualDir+')':"")+':</strong> '+mutList.join(' &middot; ')+'</div>';
+  }
 
-  // REMARKS
-  H += '<div class="sec">Remarks</div>';
-  H += '<div id="rmk">'+(F.remarks||'')+'</div>';
+  // ══ REMARKS ══════════════════════════════════════════════
+  H+='<table style="flex:1;display:flex;flex-direction:column;border:1px solid #8b0000;margin-bottom:4px;width:100%"><tbody>';
+  H+=secHdr('Remarks');
+  H+='<tr style="flex:1"><td style="padding:5px 7px;font-size:7.5pt;line-height:1.45;white-space:pre-wrap;vertical-align:top" id="rmk">'+(F.remarks||'')+'</td></tr>';
+  H+='</tbody></table>';
 
-  // INJURED
+  // ══ INJURED ══════════════════════════════════════════════
   if(F.injName){
     var injP=PERSONNEL.find(function(p){return p.badge===F.injName;});
-    H += '<div class="injured"><strong>Personnel Injured:</strong> '+(injP?injP.name:F.injName)+' #'+F.injName+' &nbsp; Report Filed: '+(F.rptFiled||'—')+'</div>';
+    H+='<div style="font-size:7pt;padding:3px 7px;border:1px solid #ddd;border-left:3px solid #8b0000;margin-bottom:4px">'
+      +'<strong>Personnel Injured:</strong> '+(injP?injP.name:F.injName)+' #'+F.injName
+      +' &nbsp;&nbsp; <strong>Report Filed:</strong> '+(F.rptFiled||'—')+'</div>';
   }
 
-  H += '</div>'; // end .wrap
+  H+='</div>'; // .wrap
 
-  // FOOTER
-  H += '<div class="foot">';
-  H += '<div><div class="foot-txt">AURELIUS FIRE &amp; RESCUE &nbsp;|&nbsp; Run Report '+(F.runNum||'')+'</div><div class="foot-txt">IC: '+icName+'</div></div>';
+  // ══ FOOTER ═══════════════════════════════════════════════
+  H+='<table style="background:#8b0000;padding:5px 14px;width:100%"><tr>';
+  H+='<td style="color:#ffcccc;font-size:6.5pt">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Run Report '+(F.runNum||'')+'&nbsp;|&nbsp; IC: '+icName+'</td>';
   var sigCell='';
-  if(F.signature) sigCell='<img src="'+F.signature+'" style="height:22px;vertical-align:middle;border-bottom:1px solid #aaa;margin-left:6px">';
-  H += '<div class="foot-sig">'+(sigName?sigName:'___________________________')+(sigCell?'&nbsp;'+sigCell:'')+'</div>';
-  H += '</div>';
+  if(F.signature) sigCell+='<img src="'+F.signature+'" style="height:20px;vertical-align:middle;background:rgba(255,255,255,.15);padding:1px 4px">';
+  H+='<td style="text-align:right;color:#fff;font-size:7pt;font-weight:700">'+(sigName?sigName+'&nbsp;&nbsp;':'')+(sigCell||'_________________________')+'</td>';
+  H+='</tr></table>';
 
-  H += '</body></html>';
+  H+='</body></html>';
   return H;
 }
 
