@@ -2012,158 +2012,235 @@ function buildPrintHTML() {
   var sigName   = sigPerson ? sigPerson.name+' #'+sigPerson.badge : '';
   var filledCars= F.cars.filter(function(c){return c.model||c.plate||c.color;});
   var usedAmbs  = F.amb.filter(function(a){return a.svc;});
-  var usedLaw   = F.law.filter(function(l){return l&&l.trim();}).map(function(l){var pts=l.split('||');return pts[0]+(pts[1]?' - '+pts[1]:'');});
+  var usedLaw   = F.law.filter(function(l){return l&&l.trim();}).map(function(l){var pts=l.split('||');return pts[0]+(pts[1]?' — '+pts[1]:'');});
   var usedRef   = (F.refusedPcr||[]).filter(function(p){return p.trim();});
   var mutList   = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
   var activeApp = APPARATUS.filter(function(a){return F.apparatus[a];});
-  var dispText  = dispEntry ? dispEntry.label+(F.dispDetail?' '+F.dispDetail:'') : '—';
+  var dispText  = dispEntry ? dispEntry.label+(F.dispDetail?' — '+F.dispDetail:'') : '—';
   var tDisp=parseMin(F.disp), tInQ=parseMin(F.inQ);
   var callMins=null;
   if(tDisp!==null&&tInQ!==null){callMins=tInQ-tDisp;if(callMins<0)callMins+=1440;}
   var persHours = callMins!==null&&totalPers>0 ? ((callMins*totalPers)/60).toFixed(1) : null;
+  var td=function(t1,t2){return timeDiffStr(t1,t2)||'';};
 
-  // Personnel table — 2 columns, fixed
-  var persRows = '';
-  if(selPers.length){
-    var half=Math.ceil(selPers.length/2);
-    for(var r=0;r<half;r++){
-      var p1=selPers[r], p2=selPers[r+half];
-      persRows+='<tr>';
-      persRows+='<td style="width:50%;padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+p1.name+' <span style="color:#555">#'+p1.badge+(p1.qual?' '+p1.qual:'')+'</span></td>';
-      persRows+='<td style="width:50%;padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(p2?p2.name+' <span style="color:#555">#'+p2.badge+(p2.qual?' '+p2.qual:'')+'</span>':'')+'</td>';
-      persRows+='</tr>';
-    }
-  } else {
-    persRows='<tr><td colspan="2" style="padding:3px 5px;border:1px solid #ccc;font-size:7pt;color:#999">None selected</td></tr>';
-  }
+  // ── Build section HTML strings ───────────────────────────
 
-  // Apparatus rows with driver
-  var appRows = '';
+  // Apparatus table
+  var appHtml='';
   if(activeApp.length){
     activeApp.forEach(function(a){
       var dB=(F.apparatusDriver||{})[a];
       var dP=dB?PERSONNEL.find(function(p){return p.badge===dB;}):null;
-      var dStr=dP?dP.name+' #'+dP.badge:'';
-      appRows+='<tr><td style="width:30%;padding:2px 5px;border:1px solid #ccc;font-size:7pt;font-weight:700">'+a+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+dStr+'</td></tr>';
+      appHtml+='<tr>'
+        +'<td class="app-unit">'+a+'</td>'
+        +'<td class="app-driver">'+(dP?dP.name+' #'+dP.badge:'')+'</td>'
+        +'</tr>';
     });
   } else {
-    appRows='<tr><td colspan="2" style="padding:2px 5px;border:1px solid #ccc;font-size:7pt;color:#999">None</td></tr>';
+    appHtml='<tr><td colspan="2" class="empty">None</td></tr>';
   }
 
-  var timeDiff = function(t1,t2){return timeDiffStr(t1,t2)||'';};
+  // Personnel table
+  var persHtml='';
+  if(selPers.length){
+    var half=Math.ceil(selPers.length/2);
+    for(var r=0;r<half;r++){
+      var p1=selPers[r], p2=selPers[r+half];
+      persHtml+='<tr>'
+        +'<td class="pers-cell">'+p1.name+' <span class="badge">#'+p1.badge+(p1.qual?' &middot; '+p1.qual.toUpperCase():'')+'</span></td>'
+        +'<td class="pers-cell">'+(p2?p2.name+' <span class="badge">#'+p2.badge+(p2.qual?' &middot; '+p2.qual.toUpperCase():'')+'</span>':'')+'</td>'
+        +'</tr>';
+    }
+  } else {
+    persHtml='<tr><td colspan="2" class="empty">None selected</td></tr>';
+  }
 
-  // Use letter height minus margins to calculate remarks flex height
-  var S = [
-    '*{box-sizing:border-box;margin:0;padding:0}',
-    'html,body{height:100%;margin:0;padding:0}',
-    'body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;background:white;',
-    'display:flex;flex-direction:column;height:100%}',
-    '@page{size:letter portrait;margin:0.3in 0.38in}',
+  // Vehicles
+  var vehHtml='';
+  if(filledCars.length){
+    filledCars.forEach(function(c,i){
+      vehHtml+='<tr>'
+        +'<td class="veh-num">'+(i+1)+'</td>'
+        +'<td class="veh-cell">'+(c.model||'—')+'</td>'
+        +'<td class="veh-cell">'+(c.plate||'—')+'</td>'
+        +'<td class="veh-cell">'+(c.color||'—')+'</td>'
+        +'</tr>';
+    });
+  }
+
+  // Law + EMS inline
+  var lawHtml='', emsHtml='';
+  usedLaw.forEach(function(l,i){
+    lawHtml+='<div class="list-item"><span class="item-num">'+(i+1)+'</span>'+l+'</div>';
+  });
+  usedAmbs.forEach(function(a,i){
+    emsHtml+='<div class="list-item"><span class="item-num">'+(i+1)+'</span>'+ambName(a)
+      +(a.pcr?' &nbsp;<span class="badge">PCR '+a.pcr+'</span>':'')+'</div>';
+  });
+  if(usedRef.length) emsHtml+='<div style="font-size:6.5pt;margin-top:2px;color:#555"><strong>Refused:</strong> '+usedRef.join(', ')+'</div>';
+
+  var CSS = [
+    '@page{size:letter portrait;margin:0}',
+    'html,body{margin:0;padding:0;height:100%;background:#fff}',
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:7.5pt;color:#111;',
+      'display:flex;flex-direction:column}',
+    /* header */
+    '.hdr{background:#1a1a1a;color:#fff;padding:9px 16px;display:flex;',
+      'align-items:center;justify-content:space-between}',
+    '.hdr-dept{font-size:13pt;font-weight:700;letter-spacing:.03em}',
+    '.hdr-sub{font-size:6.5pt;color:#aaa;margin-top:1px}',
+    '.hdr-right{text-align:right}',
+    '.hdr-rn{font-size:11pt;font-weight:700;display:block}',
+    '.hdr-date{font-size:7pt;color:#ccc}',
+    /* accent bar */
+    '.accent{height:3px;background:repeating-linear-gradient(90deg,#555 0,#555 60%,#888 60%,#888 100%)}',
+    /* body wrap */
+    '.wrap{flex:1;display:flex;flex-direction:column;padding:9px 14px 8px;overflow:hidden}',
+    /* section label */
+    '.sec{font-size:5.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.12em;',
+      'color:#555;border-bottom:1px solid #ccc;padding-bottom:1px;margin:7px 0 3px}',
+    '.sec:first-child{margin-top:0}',
+    /* info row */
+    '.info-row{display:flex;gap:0;border:1px solid #ddd;margin-bottom:5px;border-radius:2px;overflow:hidden}',
+    '.info-cell{flex:1;padding:3px 7px;border-right:1px solid #ddd}',
+    '.info-cell:last-child{border-right:none}',
+    '.info-cell.wide{flex:2}',
+    '.info-lbl{font-size:5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#888;display:block;margin-bottom:1px}',
+    '.info-val{font-size:8pt;font-weight:700;display:block;line-height:1.2}',
+    /* time row */
+    '.time-row{display:flex;gap:0;border:1px solid #ddd;border-radius:2px;overflow:hidden;margin-bottom:3px}',
+    '.time-cell{flex:1;text-align:center;padding:3px 3px;border-right:1px solid #ddd}',
+    '.time-cell:last-child{border-right:none}',
+    '.time-lbl{font-size:5pt;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;display:block}',
+    '.time-val{font-size:11pt;font-weight:700;display:block;line-height:1.1}',
+    '.time-diff{font-size:5.5pt;color:#555;display:block}',
+    /* stat chips */
+    '.stat-row{display:flex;gap:3px;margin-bottom:5px}',
+    '.stat{flex:1;border:1px solid #ddd;border-radius:2px;padding:3px 5px;border-top:2px solid #333}',
+    '.stat-lbl{font-size:5pt;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#888;display:block}',
+    '.stat-val{font-size:10pt;font-weight:700;display:block;line-height:1.1}',
+    /* two col */
+    '.two-col{display:flex;gap:8px;margin-bottom:5px}',
+    '.col{flex:1;overflow:hidden}',
+    '.col.narrow{flex:.9}',
+    /* tables */
     'table{border-collapse:collapse;width:100%}',
-    '#main-wrap{flex:1;display:flex;flex-direction:column;height:100%}',
-    '#remarks-box{flex:1;min-height:30px;border:1px solid #ccc;padding:4px 6px;',
-    'white-space:pre-wrap;font-size:7.5pt;margin-bottom:4px}'
+    '.app-unit{font-size:7pt;font-weight:700;padding:2px 5px;border:1px solid #ddd;width:38%}',
+    '.app-driver{font-size:7pt;padding:2px 5px;border:1px solid #ddd;color:#333}',
+    '.pers-cell{font-size:7pt;padding:2px 5px;border:1px solid #eee;width:50%}',
+    '.badge{font-size:6pt;color:#666;font-weight:700}',
+    '.veh-num{font-size:7pt;font-weight:700;padding:2px 4px;border:1px solid #ddd;width:16px;text-align:center}',
+    '.veh-cell{font-size:7pt;padding:2px 5px;border:1px solid #ddd}',
+    /* law/ems lists */
+    '.list-item{font-size:7pt;padding:1px 0;border-bottom:1px solid #f0f0f0}',
+    '.item-num{display:inline-block;width:12px;font-weight:700;color:#888}',
+    /* remarks */
+    '#rmk{flex:1;border:1px solid #ddd;border-radius:2px;padding:5px 7px;',
+      'font-size:7.5pt;line-height:1.4;white-space:pre-wrap;min-height:24px;',
+      'background:#fafafa;margin-bottom:4px}',
+    /* injured */
+    '.injured{font-size:7pt;padding:3px 7px;border:1px solid #ddd;border-left:3px solid #555;',
+      'border-radius:2px;margin-bottom:4px}',
+    /* footer */
+    '.foot{background:#1a1a1a;color:#fff;padding:5px 14px;display:flex;',
+      'justify-content:space-between;align-items:center;flex-shrink:0}',
+    '.foot-txt{font-size:6pt;color:#aaa}',
+    '.foot-sig{font-size:6.5pt;text-align:right}',
+    '.empty{font-size:7pt;color:#aaa;padding:2px 5px}',
   ].join('');
 
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+S+'</style></head><body><div id="main-wrap">';
+  var H = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+CSS+'</style></head><body>';
 
   // HEADER
-  html += '<table style="margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px"><tr>';
-  html += '<td style="font-size:13pt;font-weight:700;letter-spacing:.02em">AURELIUS FIRE AND RESCUE</td>';
-  html += '<td style="text-align:right;font-size:9pt;font-weight:700">Run #: '+(F.runNum||'—')+'&nbsp;&nbsp;Date: '+(F.date||'—')+'</td></tr>';
-  html += '<tr><td style="font-size:7pt;color:#555">Incident Run Report</td><td></td></tr></table>';
+  H += '<div class="hdr">';
+  H += '<div><div class="hdr-dept">AURELIUS FIRE &amp; RESCUE</div><div class="hdr-sub">Incident Run Report</div></div>';
+  H += '<div class="hdr-right"><span class="hdr-rn">'+( F.runNum||'—')+'</span><span class="hdr-date">'+(F.date||'—')+'</span></div>';
+  H += '</div><div class="accent"></div>';
 
-  // INCIDENT INFO
-  html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Incident Information</div>';
-  html += '<table style="margin-bottom:4px"><tr>';
-  html += '<td style="width:22%;padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">INCIDENT COMMANDER</span><span style="font-size:8pt;font-weight:700">'+icName+'</span></td>';
-  html += '<td style="width:20%;padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">DISPATCH TYPE</span><span style="font-size:7.5pt">'+dispText+'</span></td>';
-  html += '<td style="width:14%;padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">LOCATION</span><span style="font-size:7.5pt">'+(locEntry?locEntry.label:'—')+'</span></td>';
-  html += '<td style="padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">ADDRESS</span><span style="font-size:7.5pt">'+(F.address||'—')+'</span></td>';
-  html += '</tr></table>';
-  if(F.dispActual) html += '<div style="font-size:7.5pt;margin-bottom:4px"><strong>Dispatch:</strong> '+F.dispActual+'</div>';
+  // BODY WRAP
+  H += '<div class="wrap">';
+
+  // INCIDENT
+  H += '<div class="sec">Incident</div>';
+  H += '<div class="info-row">';
+  H += '<div class="info-cell"><span class="info-lbl">Incident Commander</span><span class="info-val">'+icName+'</span></div>';
+  H += '<div class="info-cell"><span class="info-lbl">Dispatch Type</span><span class="info-val">'+dispText+'</span></div>';
+  H += '<div class="info-cell"><span class="info-lbl">Location</span><span class="info-val">'+(locEntry?locEntry.label:'—')+'</span></div>';
+  H += '<div class="info-cell wide"><span class="info-lbl">Address</span><span class="info-val">'+(F.address||'—')+'</span></div>';
+  H += '</div>';
+  if(F.dispActual) H += '<div style="font-size:7pt;color:#555;margin-bottom:4px;padding:2px 5px;border-left:2px solid #ccc"><em>Dispatch:</em> '+F.dispActual+'</div>';
 
   // TIMES
-  html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Response Times</div>';
-  html += '<table style="margin-bottom:2px"><tr>';
-  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">DISPATCHED</div><div style="font-size:10pt;font-weight:700">'+(F.disp||'—')+'</div></td>';
-  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">ENROUTE</div><div style="font-size:10pt;font-weight:700">'+(F.enroute||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.disp,F.enroute)+'</div></td>';
-  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">ARRIVED</div><div style="font-size:10pt;font-weight:700">'+(F.arrived||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.enroute,F.arrived)+'</div></td>';
-  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">CLEARED</div><div style="font-size:10pt;font-weight:700">'+(F.clear||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.arrived,F.clear)+'</div></td>';
-  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">IN QUARTERS</div><div style="font-size:10pt;font-weight:700">'+(F.inQ||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.clear,F.inQ)+'</div></td>';
-  html += '</tr></table>';
-  html += '<table style="margin-bottom:4px"><tr>';
-  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:25%"><span style="font-size:5.5pt;font-weight:700;display:block">TOTAL CALL TIME</span><span style="font-size:9pt;font-weight:700">'+(callMins!==null?fmtDur(callMins):'—')+'</span></td>';
-  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:20%"><span style="font-size:5.5pt;font-weight:700;display:block">PERSONNEL</span><span style="font-size:9pt;font-weight:700">'+totalPers+'</span></td>';
-  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:20%"><span style="font-size:5.5pt;font-weight:700;display:block">PERSONNEL HRS</span><span style="font-size:9pt;font-weight:700">'+(persHours!==null?persHours+' hrs':'—')+'</span></td>';
-  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:17%"><span style="font-size:5.5pt;font-weight:700;display:block">EMTs</span><span style="font-size:9pt;font-weight:700">'+(F.emtCt||autoEmt)+'</span></td>';
-  html += '<td style="padding:2px 6px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">INTERIOR FF</span><span style="font-size:9pt;font-weight:700">'+(F.intCt||autoInt)+'</span></td>';
-  html += '</tr></table>';
+  H += '<div class="sec">Response Times</div>';
+  H += '<div class="time-row">';
+  H += '<div class="time-cell"><span class="time-lbl">Dispatched</span><span class="time-val">'+(F.disp||'—')+'</span><span class="time-diff">&nbsp;</span></div>';
+  H += '<div class="time-cell"><span class="time-lbl">Enroute</span><span class="time-val">'+(F.enroute||'—')+'</span><span class="time-diff">'+td(F.disp,F.enroute)+'</span></div>';
+  H += '<div class="time-cell"><span class="time-lbl">Arrived</span><span class="time-val">'+(F.arrived||'—')+'</span><span class="time-diff">'+td(F.enroute,F.arrived)+'</span></div>';
+  H += '<div class="time-cell"><span class="time-lbl">Cleared</span><span class="time-val">'+(F.clear||'—')+'</span><span class="time-diff">'+td(F.arrived,F.clear)+'</span></div>';
+  H += '<div class="time-cell"><span class="time-lbl">In Quarters</span><span class="time-val">'+(F.inQ||'—')+'</span><span class="time-diff">'+td(F.clear,F.inQ)+'</span></div>';
+  H += '</div>';
+
+  // STATS
+  H += '<div class="stat-row">';
+  H += '<div class="stat"><span class="stat-lbl">Call Time</span><span class="stat-val">'+(callMins!==null?fmtDur(callMins):'—')+'</span></div>';
+  H += '<div class="stat"><span class="stat-lbl">Personnel</span><span class="stat-val">'+totalPers+'</span></div>';
+  H += '<div class="stat"><span class="stat-lbl">Pers. Hours</span><span class="stat-val">'+(persHours!==null?persHours:'—')+'</span></div>';
+  H += '<div class="stat"><span class="stat-lbl">EMTs</span><span class="stat-val">'+(F.emtCt||autoEmt)+'</span></div>';
+  H += '<div class="stat"><span class="stat-lbl">Interior FF</span><span class="stat-val">'+(F.intCt||autoInt)+'</span></div>';
+  H += '</div>';
 
   // APPARATUS + PERSONNEL
-  html += '<table style="margin-bottom:4px"><tr valign="top">';
-  html += '<td style="width:42%;padding-right:6px"><div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Apparatus Responding</div><table>'+appRows+'</table></td>';
-  html += '<td style="padding-left:6px"><div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Personnel on Scene</div><table>'+persRows+'</table></td>';
-  html += '</tr></table>';
+  H += '<div class="two-col">';
+  H += '<div class="col narrow"><div class="sec">Apparatus</div><table>'+appHtml+'</table></div>';
+  H += '<div class="col"><div class="sec">Personnel on Scene</div><table>'+persHtml+'</table></div>';
+  H += '</div>';
 
   // VEHICLES
   if(filledCars.length){
-    html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Vehicles Involved</div>';
-    html += '<table style="margin-bottom:4px"><thead><tr>';
-    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">#</th>';
-    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">Year / Make / Model</th>';
-    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">Plate</th>';
-    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">Color</th>';
-    html += '</tr></thead><tbody>';
-    filledCars.forEach(function(c,i){
-      html += '<tr><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt;font-weight:700;width:18px">'+(i+1)+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(c.model||'—')+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(c.plate||'—')+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(c.color||'—')+'</td></tr>';
-    });
-    html += '</tbody></table>';
+    H += '<div class="sec">Vehicles Involved</div>';
+    H += '<table style="margin-bottom:5px"><thead><tr>';
+    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">#</th>';
+    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">YEAR / MAKE / MODEL</th>';
+    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">PLATE</th>';
+    H += '<th style="padding:2px 4px;border:1px solid #ddd;text-align:left;font-size:5.5pt;color:#888;font-weight:700;background:#f5f5f5">COLOR</th>';
+    H += '</tr></thead><tbody>'+vehHtml+'</tbody></table>';
   }
 
   // LAW + EMS
-  if(usedLaw.length||usedAmbs.length){
-    html += '<table style="margin-bottom:4px"><tr valign="top">';
-    if(usedLaw.length){
-      html += '<td style="width:50%;padding-right:6px"><div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Law Enforcement</div>';
-      usedLaw.forEach(function(l){html+='<div style="font-size:7pt;margin-bottom:1px">• '+l+'</div>';});
-      html += '</td>';
-    }
-    if(usedAmbs.length){
-      html += '<td'+(usedLaw.length?' style="padding-left:6px"':'')+'>';
-      html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">EMS / Ambulances</div>';
-      html += '<table><thead><tr><th style="padding:2px 4px;border:1px solid #ccc;font-size:6pt;background:#eee">#</th><th style="padding:2px 4px;border:1px solid #ccc;font-size:6pt;background:#eee">Service</th><th style="padding:2px 4px;border:1px solid #ccc;font-size:6pt;background:#eee">PCR #</th></tr></thead><tbody>';
-      usedAmbs.forEach(function(a,i){html+='<tr><td style="padding:2px 4px;border:1px solid #ccc;font-size:7pt;font-weight:700">'+(i+1)+'</td><td style="padding:2px 4px;border:1px solid #ccc;font-size:7pt">'+(ambName(a)||'—')+'</td><td style="padding:2px 4px;border:1px solid #ccc;font-size:7pt">'+(a.pcr||'—')+'</td></tr>';});
-      html += '</tbody></table>';
-      if(usedRef.length) html += '<div style="font-size:7pt;margin-top:2px"><strong>Refused PCR:</strong> '+usedRef.join(', ')+'</div>';
-      html += '</td>';
-    }
-    html += '</tr></table>';
+  if(lawHtml||emsHtml){
+    H += '<div class="two-col">';
+    if(lawHtml) H += '<div class="col"><div class="sec">Law Enforcement</div>'+lawHtml+'</div>';
+    if(emsHtml) H += '<div class="col"><div class="sec">EMS / Ambulances</div>'+emsHtml+'</div>';
+    H += '</div>';
   }
 
-  if(mutList.length) html += '<div style="font-size:7pt;margin-bottom:4px"><strong>Mutual Aid'+(F.mutualDir?' ('+F.mutualDir+')':"")+':</strong> '+mutList.join(', ')+'</div>';
+  // MUTUAL AID
+  if(mutList.length) H += '<div style="font-size:7pt;color:#555;margin-bottom:4px"><strong>Mutual Aid'+(F.mutualDir?' ('+F.mutualDir+')':"")+':</strong> '+mutList.join(' · ')+'</div>';
 
   // REMARKS
-  html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Remarks</div>';
-  html += '<div id="remarks-box">'+(F.remarks||'')+'</div>';
+  H += '<div class="sec">Remarks</div>';
+  H += '<div id="rmk">'+(F.remarks||'')+'</div>';
 
+  // INJURED
   if(F.injName){
     var injP=PERSONNEL.find(function(p){return p.badge===F.injName;});
-    html += '<div style="font-size:7.5pt;margin-bottom:4px;padding:3px 6px;border:1px solid #ccc"><strong>Personnel Injured:</strong> '+(injP?injP.name:F.injName)+' Badge: '+F.injName+' &nbsp; Report Filed: '+(F.rptFiled||'—')+'</div>';
+    H += '<div class="injured"><strong>Personnel Injured:</strong> '+(injP?injP.name:F.injName)+' #'+F.injName+' &nbsp; Report Filed: '+(F.rptFiled||'—')+'</div>';
   }
 
+  H += '</div>'; // end .wrap
+
   // FOOTER
-  html += '<table style="border-top:1px solid #000;padding-top:3px;margin-top:4px"><tr>';
-  html += '<td style="font-size:6.5pt">Aurelius Fire &amp; Rescue — Run Report '+(F.runNum||'')+'</td>';
-  html += '<td style="text-align:center;font-size:6.5pt">IC: '+icName+'</td>';
-  var sigCell = sigName?'Report by: '+sigName+'&nbsp;&nbsp;':'';
-  if(F.signature) sigCell += '<img src="'+F.signature+'" style="height:20px;vertical-align:middle;border-bottom:1px solid #000">';
-  else sigCell += 'Report by: ___________________________';
-  html += '<td style="text-align:right;font-size:6.5pt">'+sigCell+'</td>';
-  html += '</tr></table>';
-  html += '</div></body></html>';
-  return html;
+  H += '<div class="foot">';
+  H += '<div><div class="foot-txt">AURELIUS FIRE &amp; RESCUE &nbsp;|&nbsp; Run Report '+(F.runNum||'')+'</div><div class="foot-txt">IC: '+icName+'</div></div>';
+  var sigCell='';
+  if(F.signature) sigCell='<img src="'+F.signature+'" style="height:22px;vertical-align:middle;border-bottom:1px solid #aaa;margin-left:6px">';
+  H += '<div class="foot-sig">'+(sigName?sigName:'___________________________')+(sigCell?'&nbsp;'+sigCell:'')+'</div>';
+  H += '</div>';
+
+  H += '</body></html>';
+  return H;
 }
+
 
 function buildBlankFormHTML() {
   // 40-slot roster: use real roster for first N entries, blank lines for rest
