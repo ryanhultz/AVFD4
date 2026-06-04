@@ -1991,376 +1991,280 @@ const PRINT_STYLES = ``;  // keep var for blank form compat, real styles inline 
 function buildPrintHTML() {
   function parseMin(t) {
     if (!t) return null;
-    const p = t.split(':');
-    const h = parseInt(p[0]||0), m = parseInt(p[1]||0);
+    var p = t.split(':');
+    var h = parseInt(p[0]||0), m = parseInt(p[1]||0);
     return isNaN(h)||isNaN(m) ? null : h*60+m;
   }
   function fmtDur(m) {
     if (m===null||m<0) return '—';
-    const h=Math.floor(m/60),mn=m%60;
-    return h>0?`${h}h ${mn}m`:`${mn} min`;
+    var h=Math.floor(m/60),mn=m%60;
+    return h>0?h+'h '+mn+'m':mn+' min';
+  }
+  var selPers   = PERSONNEL.filter(function(p){return F.personnel[p.badge];});
+  var autoEmt   = selPers.filter(function(p){return p.qual&&p.qual.includes('emt');}).length;
+  var autoInt   = selPers.filter(function(p){return p.qual&&p.qual.includes('int');}).length;
+  var totalPers = parseInt(F.totalCt)||selPers.length;
+  var dispEntry = [].concat(DISPATCH_TYPES,DISPATCH_SPECIAL).find(function(d){return d.code===F.dispType;});
+  var locEntry  = LOCATIONS.find(function(l){return l.code===F.locCode;});
+  var icPerson  = PERSONNEL.find(function(p){return p.badge===F.ic;});
+  var icName    = icPerson ? icPerson.name+' #'+icPerson.badge : (F.ic||'—');
+  var sigPerson = PERSONNEL.find(function(p){return p.badge===F.reportBy;});
+  var sigName   = sigPerson ? sigPerson.name+' #'+sigPerson.badge : '';
+  var filledCars= F.cars.filter(function(c){return c.model||c.plate||c.color;});
+  var usedAmbs  = F.amb.filter(function(a){return a.svc;});
+  var usedLaw   = F.law.filter(function(l){return l&&l.trim();}).map(function(l){var pts=l.split('||');return pts[0]+(pts[1]?' - '+pts[1]:'');});
+  var usedRef   = (F.refusedPcr||[]).filter(function(p){return p.trim();});
+  var mutList   = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
+  var activeApp = APPARATUS.filter(function(a){return F.apparatus[a];});
+  var dispText  = dispEntry ? dispEntry.label+(F.dispDetail?' '+F.dispDetail:'') : '—';
+  var tDisp=parseMin(F.disp), tInQ=parseMin(F.inQ);
+  var callMins=null;
+  if(tDisp!==null&&tInQ!==null){callMins=tInQ-tDisp;if(callMins<0)callMins+=1440;}
+  var persHours = callMins!==null&&totalPers>0 ? ((callMins*totalPers)/60).toFixed(1) : null;
+
+  // Personnel table — 2 columns, fixed
+  var persRows = '';
+  if(selPers.length){
+    var half=Math.ceil(selPers.length/2);
+    for(var r=0;r<half;r++){
+      var p1=selPers[r], p2=selPers[r+half];
+      persRows+='<tr>';
+      persRows+='<td style="width:50%;padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+p1.name+' <span style="color:#555">#'+p1.badge+(p1.qual?' '+p1.qual:'')+'</span></td>';
+      persRows+='<td style="width:50%;padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(p2?p2.name+' <span style="color:#555">#'+p2.badge+(p2.qual?' '+p2.qual:'')+'</span>':'')+'</td>';
+      persRows+='</tr>';
+    }
+  } else {
+    persRows='<tr><td colspan="2" style="padding:3px 5px;border:1px solid #ccc;font-size:7pt;color:#999">None selected</td></tr>';
   }
 
-  const selPers   = PERSONNEL.filter(p => F.personnel[p.badge]);
-  const autoEmt   = selPers.filter(p => p.qual&&p.qual.includes('emt')).length;
-  const autoInt   = selPers.filter(p => p.qual&&p.qual.includes('int')).length;
-  const totalPers = parseInt(F.totalCt)||selPers.length;
-  const dispEntry = [...DISPATCH_TYPES,...DISPATCH_SPECIAL].find(d=>d.code===F.dispType);
-  const locEntry  = LOCATIONS.find(l=>l.code===F.locCode);
-  const icPerson  = PERSONNEL.find(p=>p.badge===F.ic);
-  const icName    = icPerson ? `${icPerson.name} #${icPerson.badge}` : (F.ic||'—');
-  const sigPerson = PERSONNEL.find(p=>p.badge===F.reportBy);
-  const sigName   = sigPerson ? `${sigPerson.name} #${sigPerson.badge}` : '';
-  const filledCars= F.cars.filter(c=>c.model||c.plate||c.color);
-  const usedAmbs  = F.amb.filter(a=>a.svc);
-  const usedLaw   = F.law.filter(l=>l&&l.trim()).map(l=>{const pts=l.split('||');return pts[0]+(pts[1]?' — '+pts[1]:'');});
-  const usedRef   = (F.refusedPcr||[]).filter(p=>p.trim());
-  const mutList   = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
-  const activeApp = APPARATUS.filter(a=>F.apparatus[a]);
-  const dispText  = dispEntry ? dispEntry.label+(F.dispDetail?' '+F.dispDetail:'') : '—';
+  // Apparatus rows with driver
+  var appRows = '';
+  if(activeApp.length){
+    activeApp.forEach(function(a){
+      var dB=(F.apparatusDriver||{})[a];
+      var dP=dB?PERSONNEL.find(function(p){return p.badge===dB;}):null;
+      var dStr=dP?dP.name+' #'+dP.badge:'';
+      appRows+='<tr><td style="width:30%;padding:2px 5px;border:1px solid #ccc;font-size:7pt;font-weight:700">'+a+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+dStr+'</td></tr>';
+    });
+  } else {
+    appRows='<tr><td colspan="2" style="padding:2px 5px;border:1px solid #ccc;font-size:7pt;color:#999">None</td></tr>';
+  }
 
-  const tDisp=parseMin(F.disp), tInQ=parseMin(F.inQ);
-  let callMins=null;
-  if(tDisp!==null&&tInQ!==null){callMins=tInQ-tDisp;if(callMins<0)callMins+=1440;}
-  const persHours = callMins!==null&&totalPers>0 ? ((callMins*totalPers)/60).toFixed(1) : null;
+  var timeDiff = function(t1,t2){return timeDiffStr(t1,t2)||'';};
 
-  const S = `
-  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Open Sans',Arial,sans-serif;font-size:7.5pt;color:#1a1a1a;background:white}
-  @page{size:letter portrait;margin:0}
-  .pg{width:8.5in;min-height:11in;padding:0.25in 0.35in 0.28in;position:relative;background:white}
-  .hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid #8b0000;padding-bottom:4px;margin-bottom:7px}
-  .hn{font-size:11pt;font-weight:700;color:#8b0000;letter-spacing:.02em;line-height:1}
-  .hs{font-size:6.5pt;color:#888;margin-top:1px}
-  .hr{text-align:right}
-  .hrn{font-size:10pt;font-weight:700;display:block}
-  .hrd{font-size:7pt;color:#555}
-  .sec{font-size:5.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8b0000;border-bottom:1px solid #8b0000;padding-bottom:1px;margin:6px 0 3px}
-  .irow{display:flex;border:1px solid #ddd;border-radius:3px;margin-bottom:4px;overflow:hidden}
-  .ic{flex:1;padding:3px 6px;border-right:1px solid #ddd}
-  .ic:last-child{border-right:none}
-  .il{font-size:5pt;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.05em;display:block}
-  .iv{font-size:8pt;font-weight:600;display:block;line-height:1.2}
-  .trow{display:flex;border:1px solid #ddd;border-radius:3px;overflow:hidden;margin-bottom:4px}
-  .tc{flex:1;padding:3px 4px;border-right:1px solid #ddd;text-align:center}
-  .tc:last-child{border-right:none}
-  .tl{font-size:5pt;font-weight:700;color:#8b0000;text-transform:uppercase;display:block}
-  .tv{font-size:9pt;font-weight:700;display:block}
-  .td{font-size:5.5pt;color:#2d6a2d;font-weight:600;display:block}
-  .tcol{display:flex;gap:8px;margin-bottom:4px}
-  .col{flex:1}
-  .tags{display:flex;flex-wrap:wrap;gap:2px}
-  .tag{background:#f5ede0;border:1px solid #d4a96a;border-radius:2px;padding:1px 5px;font-size:6.5pt;font-weight:600;color:#5a3000}
-  .thi{background:#8b0000;border-color:#8b0000;color:white}
-  .dt{width:100%;border-collapse:collapse;margin-bottom:4px}
-  .dt th{background:#f5ede0;font-size:5.5pt;font-weight:700;text-transform:uppercase;color:#8b0000;padding:2px 5px;border:1px solid #ddd}
-  .dt td{font-size:7pt;padding:2px 5px;border:1px solid #ddd}
-  .dt tr:nth-child(even) td{background:#fafafa}
-  .rmk{border:1px solid #ddd;border-radius:3px;padding:4px 6px;min-height:32px;font-size:7.5pt;line-height:1.4;white-space:pre-wrap;background:#fafafa;margin-bottom:4px}
-  .kv{font-size:7pt;margin-bottom:3px}
-  .kv b{color:#8b0000}
-  .foot{position:absolute;bottom:0.15in;left:0.35in;right:0.35in;border-top:1px solid #ddd;padding-top:3px;display:flex;justify-content:space-between;font-size:6pt;color:#888}
-  .stat{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
-  .statbox{flex:1;min-width:80px;background:#f5ede0;border:1px solid #e0c9a6;border-radius:4px;padding:4px 7px}
-  .stl{font-size:5.5pt;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:1px}
-  .stv{font-size:13pt;font-weight:700;color:#1a1a1a;display:block;line-height:1}
-  `;
+  var S = '*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#000;background:white}@page{size:letter portrait;margin:0.35in 0.4in}table{border-collapse:collapse;width:100%}';
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${S}</style></head><body>
-  <div class="pg">
-    <div class="hdr">
-      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Incident Run Report</div></div>
-      <div class="hr"><span class="hrn">${F.runNum||'—'}</span><span class="hrd">${F.date||'—'}</span></div>
-    </div>
+  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+S+'</style></head><body>';
 
-    <div class="sec">Incident</div>
-    <div class="irow">
-      <div class="ic" style="flex:1.3"><span class="il">Incident Commander</span><span class="iv">${icName}</span></div>
-      <div class="ic"><span class="il">Dispatch Type</span><span class="iv">${dispText}</span></div>
-      <div class="ic"><span class="il">Location</span><span class="iv">${locEntry?locEntry.label:'—'}</span></div>
-      <div class="ic" style="flex:2"><span class="il">Address</span><span class="iv">${F.address||'—'}</span></div>
-    </div>
-    ${F.dispActual?`<div class="kv" style="margin-bottom:4px"><b>Dispatch:</b> ${F.dispActual}</div>`:''}
+  // HEADER
+  html += '<table style="margin-bottom:6px;border-bottom:2px solid #000;padding-bottom:4px"><tr>';
+  html += '<td style="font-size:13pt;font-weight:700;letter-spacing:.02em">AURELIUS FIRE AND RESCUE</td>';
+  html += '<td style="text-align:right;font-size:9pt;font-weight:700">Run #: '+(F.runNum||'—')+'&nbsp;&nbsp;Date: '+(F.date||'—')+'</td></tr>';
+  html += '<tr><td style="font-size:7pt;color:#555">Incident Run Report</td><td></td></tr></table>';
 
-    <div class="sec">Response Times</div>
-    <div class="trow">
-      <div class="tc"><span class="tl">Dispatched</span><span class="tv">${F.disp||'—'}</span><span class="td">&nbsp;</span></div>
-      <div class="tc"><span class="tl">Enroute</span><span class="tv">${F.enroute||'—'}</span><span class="td">${timeDiffStr(F.disp,F.enroute)||'&nbsp;'}</span></div>
-      <div class="tc"><span class="tl">Arrived</span><span class="tv">${F.arrived||'—'}</span><span class="td">${timeDiffStr(F.enroute,F.arrived)||'&nbsp;'}</span></div>
-      <div class="tc"><span class="tl">Cleared</span><span class="tv">${F.clear||'—'}</span><span class="td">${timeDiffStr(F.arrived,F.clear)||'&nbsp;'}</span></div>
-      <div class="tc"><span class="tl">In Quarters</span><span class="tv">${F.inQ||'—'}</span><span class="td">${timeDiffStr(F.clear,F.inQ)||'&nbsp;'}</span></div>
-    </div>
+  // INCIDENT INFO
+  html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Incident Information</div>';
+  html += '<table style="margin-bottom:4px"><tr>';
+  html += '<td style="width:22%;padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">INCIDENT COMMANDER</span><span style="font-size:8pt;font-weight:700">'+icName+'</span></td>';
+  html += '<td style="width:20%;padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">DISPATCH TYPE</span><span style="font-size:7.5pt">'+dispText+'</span></td>';
+  html += '<td style="width:14%;padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">LOCATION</span><span style="font-size:7.5pt">'+(locEntry?locEntry.label:'—')+'</span></td>';
+  html += '<td style="padding:2px 4px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">ADDRESS</span><span style="font-size:7.5pt">'+(F.address||'—')+'</span></td>';
+  html += '</tr></table>';
+  if(F.dispActual) html += '<div style="font-size:7.5pt;margin-bottom:4px"><strong>Dispatch:</strong> '+F.dispActual+'</div>';
 
-    <div class="stat">
-      <div class="statbox"><span class="stl">Total Call Time</span><span class="stv">${callMins!==null?fmtDur(callMins):'—'}</span></div>
-      <div class="statbox"><span class="stl">Personnel on Scene</span><span class="stv">${totalPers}</span></div>
-      <div class="statbox"><span class="stl">Total Personnel Hours</span><span class="stv">${persHours!==null?persHours+' hrs':'—'}</span></div>
-      <div class="statbox"><span class="stl">EMTs</span><span class="stv">${F.emtCt||autoEmt}</span></div>
-      <div class="statbox"><span class="stl">Interior FF</span><span class="stv">${F.intCt||autoInt}</span></div>
-    </div>
+  // TIMES
+  html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Response Times</div>';
+  html += '<table style="margin-bottom:2px"><tr>';
+  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">DISPATCHED</div><div style="font-size:10pt;font-weight:700">'+(F.disp||'—')+'</div></td>';
+  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">ENROUTE</div><div style="font-size:10pt;font-weight:700">'+(F.enroute||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.disp,F.enroute)+'</div></td>';
+  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">ARRIVED</div><div style="font-size:10pt;font-weight:700">'+(F.arrived||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.enroute,F.arrived)+'</div></td>';
+  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">CLEARED</div><div style="font-size:10pt;font-weight:700">'+(F.clear||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.arrived,F.clear)+'</div></td>';
+  html += '<td style="text-align:center;padding:2px 4px;border:1px solid #ccc;width:20%"><div style="font-size:5.5pt;font-weight:700">IN QUARTERS</div><div style="font-size:10pt;font-weight:700">'+(F.inQ||'—')+'</div><div style="font-size:6pt">'+timeDiff(F.clear,F.inQ)+'</div></td>';
+  html += '</tr></table>';
+  html += '<table style="margin-bottom:4px"><tr>';
+  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:25%"><span style="font-size:5.5pt;font-weight:700;display:block">TOTAL CALL TIME</span><span style="font-size:9pt;font-weight:700">'+(callMins!==null?fmtDur(callMins):'—')+'</span></td>';
+  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:20%"><span style="font-size:5.5pt;font-weight:700;display:block">PERSONNEL</span><span style="font-size:9pt;font-weight:700">'+totalPers+'</span></td>';
+  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:20%"><span style="font-size:5.5pt;font-weight:700;display:block">PERSONNEL HRS</span><span style="font-size:9pt;font-weight:700">'+(persHours!==null?persHours+' hrs':'—')+'</span></td>';
+  html += '<td style="padding:2px 6px;border:1px solid #ccc;width:17%"><span style="font-size:5.5pt;font-weight:700;display:block">EMTs</span><span style="font-size:9pt;font-weight:700">'+(F.emtCt||autoEmt)+'</span></td>';
+  html += '<td style="padding:2px 6px;border:1px solid #ccc"><span style="font-size:5.5pt;font-weight:700;display:block">INTERIOR FF</span><span style="font-size:9pt;font-weight:700">'+(F.intCt||autoInt)+'</span></td>';
+  html += '</tr></table>';
 
-    <div class="tcol">
-      <div class="col">
-        <div class="sec">Apparatus Responding</div>
-        <div class="tags">
-          ${activeApp.length ? activeApp.map(a=>{
-            const dB=(F.apparatusDriver||{})[a];
-            const dP=dB?PERSONNEL.find(p=>p.badge===dB):null;
-            const dStr=dP?` · ${dP.name} #${dP.badge}`:'';
-            return `<div class="tag thi" style="font-size:6.5pt">${a}${dStr}</div>`;
-          }).join('') : '<span style="color:#aaa;font-size:7pt">None</span>'}
-        </div>
-      </div>
-      <div class="col">
-        <div class="sec">Personnel on Scene</div>
-        <div class="tags">
-          ${selPers.length ? selPers.map(p=>`<div class="tag" style="font-size:6.5pt">${p.name}${p.qual?' <i style="opacity:.7">${p.qual}</i>':''}</div>`).join('')
-            : '<span style="color:#aaa;font-size:7pt">None selected</span>'}
-        </div>
-      </div>
-    </div>
+  // APPARATUS + PERSONNEL
+  html += '<table style="margin-bottom:4px"><tr valign="top">';
+  html += '<td style="width:42%;padding-right:6px"><div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Apparatus Responding</div><table>'+appRows+'</table></td>';
+  html += '<td style="padding-left:6px"><div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Personnel on Scene</div><table>'+persRows+'</table></td>';
+  html += '</tr></table>';
 
-    ${filledCars.length?`
-    <div class="sec">Vehicles Involved</div>
-    <table class="dt"><thead><tr><th>#</th><th>Year / Make / Model</th><th>Plate</th><th>Color</th></tr></thead>
-    <tbody>${filledCars.map((c,i)=>`<tr><td style="width:16px;text-align:center;font-weight:700">${i+1}</td><td>${c.model||'—'}</td><td>${c.plate||'—'}</td><td>${c.color||'—'}</td></tr>`).join('')}</tbody>
-    </table>`:''}
+  // VEHICLES
+  if(filledCars.length){
+    html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Vehicles Involved</div>';
+    html += '<table style="margin-bottom:4px"><thead><tr>';
+    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">#</th>';
+    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">Year / Make / Model</th>';
+    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">Plate</th>';
+    html += '<th style="padding:2px 5px;border:1px solid #ccc;text-align:left;font-size:6pt;background:#eee">Color</th>';
+    html += '</tr></thead><tbody>';
+    filledCars.forEach(function(c,i){
+      html += '<tr><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt;font-weight:700;width:18px">'+(i+1)+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(c.model||'—')+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(c.plate||'—')+'</td><td style="padding:2px 5px;border:1px solid #ccc;font-size:7pt">'+(c.color||'—')+'</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
 
-    ${usedLaw.length||usedAmbs.length?`
-    <div class="tcol">
-      ${usedLaw.length?`<div class="col"><div class="sec">Law Enforcement</div>${usedLaw.map(l=>`<div class="kv">• ${l}</div>`).join('')}</div>`:''}
-      ${usedAmbs.length?`<div class="col"><div class="sec">EMS / Ambulances</div>
-        <table class="dt"><thead><tr><th>#</th><th>Service</th><th>PCR #</th></tr></thead>
-        <tbody>${usedAmbs.map((a,i)=>`<tr><td style="width:14px;text-align:center;font-weight:700">${i+1}</td><td>${ambName(a)||'—'}</td><td>${a.pcr||'—'}</td></tr>`).join('')}</tbody></table>
-        ${usedRef.length?`<div class="kv"><b>Refused PCR:</b> ${usedRef.join(', ')}</div>`:''}
-      </div>`:''}
-    </div>`:''}
+  // LAW + EMS
+  if(usedLaw.length||usedAmbs.length){
+    html += '<table style="margin-bottom:4px"><tr valign="top">';
+    if(usedLaw.length){
+      html += '<td style="width:50%;padding-right:6px"><div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Law Enforcement</div>';
+      usedLaw.forEach(function(l){html+='<div style="font-size:7pt;margin-bottom:1px">• '+l+'</div>';});
+      html += '</td>';
+    }
+    if(usedAmbs.length){
+      html += '<td'+(usedLaw.length?' style="padding-left:6px"':'')+'>';
+      html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">EMS / Ambulances</div>';
+      html += '<table><thead><tr><th style="padding:2px 4px;border:1px solid #ccc;font-size:6pt;background:#eee">#</th><th style="padding:2px 4px;border:1px solid #ccc;font-size:6pt;background:#eee">Service</th><th style="padding:2px 4px;border:1px solid #ccc;font-size:6pt;background:#eee">PCR #</th></tr></thead><tbody>';
+      usedAmbs.forEach(function(a,i){html+='<tr><td style="padding:2px 4px;border:1px solid #ccc;font-size:7pt;font-weight:700">'+(i+1)+'</td><td style="padding:2px 4px;border:1px solid #ccc;font-size:7pt">'+(ambName(a)||'—')+'</td><td style="padding:2px 4px;border:1px solid #ccc;font-size:7pt">'+(a.pcr||'—')+'</td></tr>';});
+      html += '</tbody></table>';
+      if(usedRef.length) html += '<div style="font-size:7pt;margin-top:2px"><strong>Refused PCR:</strong> '+usedRef.join(', ')+'</div>';
+      html += '</td>';
+    }
+    html += '</tr></table>';
+  }
 
-    ${mutList.length?`<div class="kv"><b>Mutual Aid ${F.mutualDir?'('+F.mutualDir+')':''}:</b> ${mutList.join(', ')}</div>`:''}
+  if(mutList.length) html += '<div style="font-size:7pt;margin-bottom:4px"><strong>Mutual Aid'+(F.mutualDir?' ('+F.mutualDir+')':"")+':</strong> '+mutList.join(', ')+'</div>';
 
-    <div class="sec">Remarks</div>
-    <div class="rmk">${F.remarks||'&nbsp;'}</div>
+  // REMARKS
+  html += '<div style="font-size:6pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #000;margin-bottom:2px">Remarks</div>';
+  html += '<div style="font-size:7.5pt;border:1px solid #ccc;padding:4px 6px;min-height:28px;white-space:pre-wrap;margin-bottom:4px">'+(F.remarks||'')+'</div>';
 
-    ${F.injName?`<div class="kv" style="padding:3px 6px;background:#fff3f3;border:1px solid #e0b0b0;border-radius:3px">
-      <b>Personnel Injured:</b> ${(PERSONNEL.find(p=>p.badge===F.injName)||{name:F.injName}).name} Badge:${F.injName} Report Filed:${F.rptFiled||'—'}
-    </div>`:''}
+  if(F.injName){
+    var injP=PERSONNEL.find(function(p){return p.badge===F.injName;});
+    html += '<div style="font-size:7.5pt;margin-bottom:4px;padding:3px 6px;border:1px solid #ccc"><strong>Personnel Injured:</strong> '+(injP?injP.name:F.injName)+' Badge: '+F.injName+' &nbsp; Report Filed: '+(F.rptFiled||'—')+'</div>';
+  }
 
-    <div class="foot">
-      <span>Aurelius Fire &amp; Rescue — Run Report ${F.runNum||''}</span>
-      <span>IC: ${icName}</span>
-      <span>${F.signature
-        ? `${sigName} <img src="${F.signature}" style="height:20px;vertical-align:middle;border-bottom:1px solid #aaa;margin-left:4px">`
-        : sigName ? `Report by: ${sigName}` : 'Report by: ___________________________'
-      }</span>
-    </div>
-  </div>
-  </body></html>`;
+  // FOOTER
+  html += '<table style="border-top:1px solid #000;padding-top:3px;margin-top:4px"><tr>';
+  html += '<td style="font-size:6.5pt">Aurelius Fire &amp; Rescue — Run Report '+(F.runNum||'')+'</td>';
+  html += '<td style="text-align:center;font-size:6.5pt">IC: '+icName+'</td>';
+  var sigCell = sigName?'Report by: '+sigName+'&nbsp;&nbsp;':'';
+  if(F.signature) sigCell += '<img src="'+F.signature+'" style="height:20px;vertical-align:middle;border-bottom:1px solid #000">';
+  else sigCell += 'Report by: ___________________________';
+  html += '<td style="text-align:right;font-size:6.5pt">'+sigCell+'</td>';
+  html += '</tr></table>';
+  html += '</body></html>';
+  return html;
 }
 
 function buildBlankFormHTML() {
-  // Personnel roster — 2 columns
-  const half = Math.ceil(PERSONNEL.length / 2);
-  let persRows = '';
-  for (let r = 0; r < half; r++) {
-    persRows += '<tr>';
-    for (let c = 0; c < 2; c++) {
-      const p = PERSONNEL[r + c * half];
-      persRows += p
-        ? `<td style="padding:4px 8px;border:1px solid #ddd;font-size:8.5pt;white-space:nowrap">
-            <span style="display:inline-block;width:11px;height:11px;border:1.5px solid #888;border-radius:2px;margin-right:6px;vertical-align:middle"></span>
-            ${p.name} <span style="color:#777;font-size:7.5pt">${p.badge}${p.qual?' — '+p.qual:''}</span>
-           </td>`
-        : '<td style="border:1px solid #ddd"></td>';
-    }
-    persRows += '</tr>';
+  // 40-slot roster: use real roster for first N entries, blank lines for rest
+  var rosterLeft = '', rosterRight = '';
+  for(var i=0;i<20;i++){
+    var p=PERSONNEL[i];
+    var chk='<span style="display:inline-block;width:12px;height:12px;border:1.5px solid #555;border-radius:2px;vertical-align:middle;margin-right:6px"></span>';
+    rosterLeft+='<tr><td style="width:22px;text-align:center;padding:3px 4px;border:1px solid #ccc;font-size:7.5pt;font-weight:700">'+(i+1)+'</td><td style="padding:3px 8px;border:1px solid #ccc;font-size:8pt">'+chk+(p?p.name+' <span style="color:#666;font-size:7.5pt">#'+p.badge+(p.qual?' — '+p.qual:'')+'</span>':'')+'</td></tr>';
+  }
+  for(var i=20;i<40;i++){
+    var p=PERSONNEL[i];
+    var chk='<span style="display:inline-block;width:12px;height:12px;border:1.5px solid #555;border-radius:2px;vertical-align:middle;margin-right:6px"></span>';
+    rosterRight+='<tr><td style="width:22px;text-align:center;padding:3px 4px;border:1px solid #ccc;font-size:7.5pt;font-weight:700">'+(i+1)+'</td><td style="padding:3px 8px;border:1px solid #ccc;font-size:8pt">'+chk+(p?p.name+' <span style="color:#666;font-size:7.5pt">#'+p.badge+(p.qual?' — '+p.qual:'')+'</span>':'')+'</td></tr>';
   }
 
-  const BS = `
-  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Open Sans',Arial,sans-serif;font-size:8.5pt;color:#1a1a1a;background:white}
-  @page{size:letter portrait;margin:0}
-  .page{width:8.5in;min-height:11in;padding:0.34in 0.42in 0.36in;position:relative;page-break-after:always;background:white}
-  .page:last-child{page-break-after:avoid}
-  .hdr{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid #8b0000;padding-bottom:6px;margin-bottom:10px}
-  .hn{font-size:14pt;font-weight:700;color:#8b0000}
-  .hs{font-size:7.5pt;color:#888}
-  .hr{text-align:right}
-  .hrn{font-size:12pt;font-weight:700;display:block}
-  /* Section — never break after, keeps heading with content */
-  .sec{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8b0000;border-bottom:1.5px solid #8b0000;padding-bottom:2px;margin:10px 0 6px;page-break-after:avoid}
-  /* keep each block together */
-  .blk{page-break-inside:avoid}
-  .fl{font-size:6.5pt;font-weight:700;color:#8b0000;text-transform:uppercase;letter-spacing:.06em;margin-top:6px;display:block;page-break-after:avoid}
-  .fline{border-bottom:1px solid #aaa;display:block;min-height:20px;margin-top:3px;page-break-inside:avoid}
-  .dt{width:100%;border-collapse:collapse;margin-bottom:8px;page-break-inside:avoid}
-  .dt th{background:#f5ede0;font-size:7pt;font-weight:700;text-transform:uppercase;color:#8b0000;padding:4px 8px;border:1px solid #ddd}
-  .dt td{font-size:8.5pt;padding:5px 8px;border:1px solid #ddd;min-height:22px}
-  .chk{display:inline-block;width:11px;height:11px;border:1.5px solid #888;border-radius:2px;margin-right:5px;vertical-align:middle}
-  .foot{position:absolute;bottom:0.2in;left:0.42in;right:0.42in;border-top:1px solid #ddd;padding-top:5px;display:flex;justify-content:space-between;font-size:7pt;color:#888}
-  `;
+  var appGrid='';
+  for(var i=0;i<APPARATUS.length;i+=5){
+    appGrid+='<tr>';
+    for(var j=i;j<Math.min(i+5,APPARATUS.length);j++){
+      appGrid+='<td style="width:20%;border:1px solid #ccc;padding:5px 7px;font-size:8.5pt"><span style="display:inline-block;width:11px;height:11px;border:1.5px solid #555;border-radius:2px;vertical-align:middle;margin-right:4px"></span>'+APPARATUS[j]+'<div style="border-bottom:1px solid #999;margin-top:8px;font-size:7pt;color:#777">driver / badge</div></td>';
+    }
+    appGrid+='</tr>';
+  }
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${BS}</style></head><body>
+  var S='*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:8.5pt;color:#000;background:white}@page{size:letter portrait;margin:0.35in 0.4in}table{border-collapse:collapse;width:100%}.pg{page-break-after:always}.pg:last-child{page-break-after:avoid}.sec{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.09em;border-bottom:1.5px solid #000;padding-bottom:2px;margin:10px 0 5px;page-break-after:avoid}.blk{page-break-inside:avoid}.fl{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:block;margin-top:5px;margin-bottom:2px}.ln{border-bottom:1px solid #888;display:block;min-height:20px}';
 
-  <!-- ═══ PAGE 1 ═══ -->
-  <div class="page">
-    <div class="hdr">
-      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Incident Run Report</div></div>
-      <div class="hr"><span class="hrn">Run #: ___________</span><span>Date: ____________</span></div>
-    </div>
+  function hdr(sub){
+    return '<table style="border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:10px"><tr><td style="font-size:14pt;font-weight:700">AURELIUS FIRE AND RESCUE</td><td style="text-align:right;font-size:9pt;font-weight:700">Run #: ___________&nbsp;&nbsp;Date: ____________</td></tr><tr><td style="font-size:7.5pt;color:#444">'+sub+'</td><td></td></tr></table>';
+  }
 
-    <div class="blk">
-      <div class="sec">Incident Information</div>
-      <div style="display:flex;gap:14px;margin-bottom:8px">
-        <div style="flex:1.5"><span class="fl">Incident Commander</span><span class="fline"></span></div>
-        <div style="flex:1"><span class="fl">Location</span><span class="fline"></span></div>
-        <div style="flex:2"><span class="fl">Address</span><span class="fline"></span></div>
-      </div>
-    </div>
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+S+'</style></head><body>';
 
-    <div class="blk">
-      <div class="sec">Dispatch</div>
-      <span class="fl">Actual Dispatch Text</span><span class="fline" style="margin-bottom:6px"></span>
-      <div style="display:flex;gap:10px;margin-bottom:8px">
-        <div style="flex:1"><span class="fl">Dispatch Type</span><span class="fline"></span></div>
-        <div style="flex:1"><span class="fl">Mutual Aid — Given or Received</span><span class="fline"></span></div>
-        <div style="flex:1.5"><span class="fl">Mutual Aid Agency</span><span class="fline"></span></div>
-      </div>
-    </div>
+  // PAGE 1
+  html+='<div class="pg">';
+  html+=hdr('Incident Run Report — Page 1 of 3');
+  html+='<div class="blk"><div class="sec">Incident Information</div>';
+  html+='<table style="margin-bottom:8px"><tr>';
+  html+='<td style="width:35%;padding-right:10px"><span class="fl">Incident Commander</span><span class="ln"></span></td>';
+  html+='<td style="width:25%;padding-right:10px"><span class="fl">Location</span><span class="ln"></span></td>';
+  html+='<td><span class="fl">Address</span><span class="ln"></span></td></tr></table></div>';
 
-    <div class="blk">
-      <div class="sec">Response Times</div>
-      <div style="display:flex;gap:5px;margin-bottom:8px">
-        ${['Dispatched','Enroute','Arrived','Cleared','In Quarters'].map(t=>`
-        <div style="flex:1;text-align:center;border:1px solid #ddd;border-radius:4px;padding:5px 4px">
-          <div style="font-size:6.5pt;font-weight:700;color:#8b0000;text-transform:uppercase">${t}</div>
-          <div style="border-bottom:1px solid #aaa;min-height:22px;margin-top:5px"></div>
-        </div>`).join('')}
-      </div>
-    </div>
+  html+='<div class="blk"><div class="sec">Dispatch</div>';
+  html+='<span class="fl">Actual Dispatch Text</span><span class="ln" style="margin-bottom:6px"></span>';
+  html+='<table style="margin-bottom:8px"><tr>';
+  html+='<td style="width:33%;padding-right:10px"><span class="fl">Dispatch Type</span><span class="ln"></span></td>';
+  html+='<td style="width:33%;padding-right:10px"><span class="fl">Mutual Aid — Given or Received</span><span class="ln"></span></td>';
+  html+='<td><span class="fl">Mutual Aid Agency</span><span class="ln"></span></td></tr></table></div>';
 
-    <div class="blk">
-      <div class="sec">Apparatus Responding — check unit, write driver name and badge number</div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
-        <tbody>
-          <tr>${APPARATUS.slice(0,5).map(a=>`<td style="border:1px solid #ddd;padding:5px 7px;font-size:8.5pt;width:20%">
-            <span class="chk"></span>${a}
-            <div style="border-bottom:1px solid #ddd;margin-top:8px;font-size:7pt;color:#aaa">driver / badge #</div>
-          </td>`).join('')}</tr>
-          <tr>${APPARATUS.slice(5).map(a=>`<td style="border:1px solid #ddd;padding:5px 7px;font-size:8.5pt;width:20%">
-            <span class="chk"></span>${a}
-            <div style="border-bottom:1px solid #ddd;margin-top:8px;font-size:7pt;color:#aaa">driver / badge #</div>
-          </td>`).join('')}</tr>
-        </tbody>
-      </table>
-    </div>
+  html+='<div class="blk"><div class="sec">Response Times</div><table style="margin-bottom:8px"><tr>';
+  ['Dispatched','Enroute','Arrived','Cleared','In Quarters'].forEach(function(t){
+    html+='<td style="width:20%;text-align:center;border:1px solid #ccc;padding:5px 4px"><div style="font-size:6.5pt;font-weight:700;text-transform:uppercase">'+t+'</div><div style="border-bottom:1px solid #888;min-height:22px;margin-top:5px"></div></td>';
+  });
+  html+='</tr></table>';
+  html+='<table style="margin-bottom:8px"><tr>';
+  ['TOTAL CALL TIME','TOTAL PERSONNEL','PERSONNEL HOURS','EMTs','INTERIOR FF'].forEach(function(l){
+    html+='<td style="border:1px solid #ccc;padding:4px 8px;width:20%"><span style="font-size:6pt;font-weight:700;display:block">'+l+'</span><span style="font-size:9pt">&nbsp;</span></td>';
+  });
+  html+='</tr></table></div>';
 
-    <div class="blk">
-      <div class="sec">Vehicles Involved</div>
-      <table class="dt">
-        <thead><tr><th>#</th><th>Year / Make / Model</th><th>Plate #</th><th>Color</th></tr></thead>
-        <tbody>${[1,2,3,4,5,6].map(n=>`<tr><td style="width:22px;text-align:center;font-weight:700">${n}</td><td></td><td></td><td></td></tr>`).join('')}</tbody>
-      </table>
-    </div>
+  html+='<div class="blk"><div class="sec">Apparatus Responding — check unit, write driver name and badge number</div>';
+  html+='<table style="margin-bottom:8px">'+appGrid+'</table></div>';
 
-    <div class="blk">
-      <div class="sec">Law Enforcement</div>
-      <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px">
-        ${[1,2,3].map(n=>`<div style="display:flex;align-items:center;gap:10px;font-size:8.5pt">
-          <span style="font-weight:700;min-width:10px">${n}.</span>
-          <span style="flex:1.5;border-bottom:1px solid #aaa;min-height:18px"></span>
-          <span style="font-size:7.5pt;color:#999">Agency</span>
-          <span style="flex:1;border-bottom:1px solid #aaa;min-height:18px"></span>
-          <span style="font-size:7.5pt;color:#999">Officer / Badge</span>
-        </div>`).join('')}
-      </div>
-    </div>
+  html+='<div class="blk"><div class="sec">Vehicles Involved</div>';
+  html+='<table style="margin-bottom:8px"><thead><tr><th style="padding:3px 6px;border:1px solid #ccc;text-align:left;font-size:6.5pt;background:#eee;width:22px">#</th><th style="padding:3px 6px;border:1px solid #ccc;text-align:left;font-size:6.5pt;background:#eee">Year / Make / Model</th><th style="padding:3px 6px;border:1px solid #ccc;text-align:left;font-size:6.5pt;background:#eee;width:18%">Plate #</th><th style="padding:3px 6px;border:1px solid #ccc;text-align:left;font-size:6.5pt;background:#eee;width:15%">Color</th></tr></thead><tbody>';
+  for(var n=1;n<=6;n++) html+='<tr><td style="padding:4px 6px;border:1px solid #ccc;font-weight:700;text-align:center">'+n+'</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td></tr>';
+  html+='</tbody></table></div>';
 
-    <div class="blk">
-      <div class="sec">EMS / Ambulances</div>
-      <table class="dt">
-        <thead><tr><th>#</th><th>Service</th><th>PCR #</th></tr></thead>
-        <tbody>${[1,2,3].map(n=>`<tr><td style="width:22px;text-align:center;font-weight:700">${n}</td><td></td><td></td></tr>`).join('')}</tbody>
-      </table>
-      <div style="font-size:8.5pt;margin-bottom:8px">
-        <b style="color:#8b0000">Refused Transport PCR:</b>
-        <span style="display:inline-block;border-bottom:1px solid #aaa;width:220px;margin-left:8px;vertical-align:bottom"></span>
-      </div>
-    </div>
+  html+='<div class="blk"><div class="sec">Law Enforcement</div>';
+  for(var n=1;n<=3;n++) html+='<table style="margin-bottom:6px"><tr><td style="width:22px;padding:3px 4px;font-weight:700">'+n+'.</td><td style="padding:3px 6px;border-bottom:1px solid #888;width:45%">&nbsp;</td><td style="width:60px;padding:3px 6px;font-size:7.5pt;color:#666">Agency</td><td style="padding:3px 6px;border-bottom:1px solid #888">&nbsp;</td><td style="width:80px;padding:3px 6px;font-size:7.5pt;color:#666">Officer/Badge</td></tr></table>';
+  html+='</div>';
 
-    <div class="foot">
-      <span>Aurelius Fire &amp; Rescue</span><span>Page 1 of 3</span>
-    </div>
-  </div>
+  html+='<div class="blk"><div class="sec">EMS / Ambulances</div>';
+  html+='<table style="margin-bottom:4px"><thead><tr><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:22px">#</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee">Service</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:30%">PCR #</th></tr></thead><tbody>';
+  for(var n=1;n<=3;n++) html+='<tr><td style="padding:4px 6px;border:1px solid #ccc;font-weight:700;text-align:center">'+n+'</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td></tr>';
+  html+='</tbody></table>';
+  html+='<div style="font-size:8.5pt;margin-bottom:8px"><strong>Refused Transport PCR:</strong> <span style="display:inline-block;border-bottom:1px solid #888;width:220px;margin-left:8px;vertical-align:bottom"></span></div></div>';
 
-  <!-- ═══ PAGE 2 ═══ -->
-  <div class="page">
-    <div class="hdr">
-      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Run Report — Page 2</div></div>
-      <div class="hr"><span class="hrn">Run #: ___________</span><span>Date: ____________</span></div>
-    </div>
+  html+='<div style="font-size:7pt;text-align:right;color:#555;border-top:1px solid #ccc;padding-top:4px">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Page 1 of 3</div>';
+  html+='</div>';
 
-    <div class="blk">
-      <div class="sec">Remarks — Cause of Incident, Damage, Insurance Carrier</div>
-      <div style="border:1px solid #ddd;border-radius:4px;min-height:90px;background:#fafafa;margin-bottom:10px"></div>
-    </div>
+  // PAGE 2
+  html+='<div class="pg">';
+  html+=hdr('Incident Run Report — Page 2 of 3');
+  html+='<div class="blk"><div class="sec">Remarks — Cause of Incident, Extent of Damage, Insurance Carrier</div><div style="border:1px solid #ccc;min-height:100px;margin-bottom:10px"></div></div>';
+  html+='<div class="blk"><div class="sec">Additional Notes / Mutual Aid</div><div style="border:1px solid #ccc;min-height:70px;margin-bottom:10px"></div></div>';
+  html+='<div class="blk"><div class="sec">Personnel Injured</div><table style="margin-bottom:10px"><tr>';
+  html+='<td style="width:40%;padding-right:10px"><span class="fl">Name</span><span class="ln"></span></td>';
+  html+='<td style="width:20%;padding-right:10px"><span class="fl">Badge #</span><span class="ln"></span></td>';
+  html+='<td><span class="fl">Report Filed</span><div style="margin-top:5px;font-size:8.5pt"><span style="display:inline-block;width:11px;height:11px;border:1.5px solid #555;border-radius:2px;vertical-align:middle;margin-right:4px"></span>YES &nbsp;&nbsp; <span style="display:inline-block;width:11px;height:11px;border:1.5px solid #555;border-radius:2px;vertical-align:middle;margin-right:4px"></span>NO</div></td>';
+  html+='</tr></table></div>';
+  html+='<div class="blk"><div class="sec">Report Signature</div><table style="margin-bottom:10px"><tr>';
+  html+='<td style="width:40%;padding-right:10px"><span class="fl">Report By (print name)</span><span class="ln"></span></td>';
+  html+='<td style="width:20%;padding-right:10px"><span class="fl">Badge #</span><span class="ln"></span></td>';
+  html+='<td><span class="fl">Signature</span><span class="ln" style="min-height:36px"></span></td>';
+  html+='</tr></table></div>';
+  html+='<div style="font-size:7pt;text-align:right;color:#555;border-top:1px solid #ccc;padding-top:4px">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Page 2 of 3</div>';
+  html+='</div>';
 
-    <div class="blk">
-      <div class="sec">Personnel Counts</div>
-      <div style="display:flex;gap:20px;margin-bottom:10px;font-size:9pt">
-        <span>EMTs: <span style="display:inline-block;border-bottom:1px solid #aaa;width:44px"></span></span>
-        <span>Interior FF: <span style="display:inline-block;border-bottom:1px solid #aaa;width:44px"></span></span>
-        <span>Total on Call: <span style="display:inline-block;border-bottom:1px solid #aaa;width:44px"></span></span>
-        <span>Total Call Time: <span style="display:inline-block;border-bottom:1px solid #aaa;width:60px"></span></span>
-        <span>Personnel Hours: <span style="display:inline-block;border-bottom:1px solid #aaa;width:60px"></span></span>
-      </div>
-    </div>
+  // PAGE 3 — Roster
+  html+='<div class="pg">';
+  html+=hdr('Personnel on Scene — Page 3 of 3');
+  html+='<div style="font-size:7pt;font-weight:700;text-transform:uppercase;letter-spacing:.09em;border-bottom:1.5px solid #000;padding-bottom:2px;margin-bottom:6px">Personnel on Scene — Check all responding members (40 slots)</div>';
+  html+='<div style="font-size:8.5pt;margin-bottom:8px">EMTs: _________ &nbsp;&nbsp; Interior FF: _________ &nbsp;&nbsp; Total: _________</div>';
+  html+='<table><tr valign="top">';
+  html+='<td style="width:50%;padding-right:4px"><table>'+rosterLeft+'</table></td>';
+  html+='<td style="padding-left:4px"><table>'+rosterRight+'</table></td>';
+  html+='</tr></table>';
+  html+='<div style="font-size:7pt;text-align:right;color:#555;border-top:1px solid #ccc;padding-top:4px;margin-top:10px">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Page 3 of 3</div>';
+  html+='</div>';
 
-    <div class="blk">
-      <div class="sec">Personnel Injured</div>
-      <div style="display:flex;gap:14px;margin-bottom:10px">
-        <div style="flex:2"><span class="fl">Name</span><span class="fline"></span></div>
-        <div style="flex:1"><span class="fl">Badge #</span><span class="fline"></span></div>
-        <div style="flex:1"><span class="fl">Report Filed</span>
-          <div style="margin-top:5px;font-size:8.5pt"><span class="chk"></span>YES &nbsp; <span class="chk"></span>NO</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="blk">
-      <div class="sec">Signature</div>
-      <div style="display:flex;gap:14px;margin-bottom:10px">
-        <div style="flex:1.5"><span class="fl">Report By (print name)</span><span class="fline"></span></div>
-        <div style="flex:1"><span class="fl">Badge #</span><span class="fline"></span></div>
-        <div style="flex:2"><span class="fl">Signature</span><span class="fline" style="min-height:36px"></span></div>
-      </div>
-    </div>
-
-    <div class="blk">
-      <div class="sec">Additional Notes</div>
-      <div style="border:1px solid #ddd;border-radius:4px;min-height:140px;background:#fafafa;margin-bottom:10px"></div>
-    </div>
-
-    <div class="foot">
-      <span>Aurelius Fire &amp; Rescue</span><span>Page 2 of 3</span>
-    </div>
-  </div>
-
-  <!-- ═══ PAGE 3 — Personnel Roster ═══ -->
-  <div class="page">
-    <div class="hdr">
-      <div><div class="hn">AURELIUS FIRE AND RESCUE</div><div class="hs">Personnel on Scene</div></div>
-      <div class="hr"><span class="hrn">Run #: ___________</span><span>Date: ____________</span></div>
-    </div>
-    <div class="sec">Personnel on Scene — check all responding members</div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px"><tbody>${persRows}</tbody></table>
-    <div class="foot">
-      <span>Aurelius Fire &amp; Rescue</span><span>Page 3 of 3</span>
-    </div>
-  </div>
-
-  </body></html>`;
+  html+='</body></html>';
+  return html;
 }
 
 function generatePDF() {
