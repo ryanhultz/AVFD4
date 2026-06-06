@@ -2057,10 +2057,12 @@ function buildPrintHTML() {
   +'#afr-pdf{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#111;width:7.5in;}'
   +'#afr-pdf table{border-collapse:collapse;width:100%}'
   +'#afr-pdf th{text-align:left}'
-  +'.afr-page2{page-break-before:always;padding-top:0}'
+  +'.afr-page1{min-height:9.6in}'
+  +'.afr-page2{page-break-before:always;break-before:page}'
   +'</style>';
 
   H+='<div id="afr-pdf">';
+  H+='<div class="afr-page1">';
 
   // ══ PAGE 1 ══════════════════════════════════════════════
   // HEADER BAR
@@ -2204,8 +2206,9 @@ function buildPrintHTML() {
     +'</td></tr></table>';
 
   // ══ PAGE 2 — PERSONNEL ON SCENE ════════════════════════
+  H+='</div>'; // close .afr-page1
   H+='<div class="afr-page2">';
-  H+='<table style="background:#222;margin-bottom:5px"><tr>'
+  H+='<table style="background:#222;margin-bottom:5px;width:100%"><tr>'
     +'<td style="padding:8px 12px;color:#fff">'
     +'<div style="font-size:15pt;font-weight:bold;letter-spacing:.03em;line-height:1">AURELIUS FIRE &amp; RESCUE</div>'
     +'<div style="font-size:7pt;color:#aaa;margin-top:2px">Personnel on Scene</div></td>'
@@ -2213,7 +2216,7 @@ function buildPrintHTML() {
     +'<div style="font-size:14pt;font-weight:bold">'+(F.runNum||"—")+'</div>'
     +'<div style="font-size:8pt;color:#aaa">'+(F.date||"—")+'</div></td>'
     +'</tr></table>';
-  H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
+  H+='<table style="margin-bottom:4px;border:1px solid #ccc;width:100%"><tbody>';
   H+=shdr('Personnel on Scene — '+selPers.length+' members  ·  EMTs: '+(F.emtCt||autoEmt)+'  ·  Interior FF: '+(F.intCt||autoInt));
   H+=persRows;
   H+='</tbody></table>';
