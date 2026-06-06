@@ -1990,7 +1990,7 @@ const PRINT_STYLES = ``;  // keep var for blank form compat, real styles inline 
 
 function buildPrintHTML() {
   function parseMin(t){if(!t)return null;var p=t.split(':'),h=parseInt(p[0]||0),m=parseInt(p[1]||0);return isNaN(h)||isNaN(m)?null:h*60+m;}
-  function fmtDur(m){if(m===null||m<0)return"";var h=Math.floor(m/60),mn=m%60;return h>0?h+"h "+mn+"m":mn+" min";}
+  function fmtDur(m){if(m===null||m<0)return"—";var h=Math.floor(m/60),mn=m%60;return h>0?h+"h "+mn+"m":mn+" min";}
   function td(t1,t2){return timeDiffStr(t1,t2)||"";}
 
   var selPers   = PERSONNEL.filter(function(p){return F.personnel[p.badge];});
@@ -2014,198 +2014,178 @@ function buildPrintHTML() {
   if(tDisp!==null&&tInQ!==null){callMins=tInQ-tDisp;if(callMins<0)callMins+=1440;}
   var persHours=callMins!==null&&totalPers>0?((callMins*totalPers)/60).toFixed(1):null;
 
-  // ── row builders ─────────────────────────────────────────
-  function lbl(t){return'<div style="font-size:6pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#333;margin-bottom:1px">'+t+'</div>';}
-  function val(t,sz){return'<div style="font-size:'+(sz||"8pt")+';font-weight:bold;line-height:1.2">'+t+'</div>';}
-  function cell(w,label,value,sz){return'<td style="width:'+w+';padding:3px 7px;border:1px solid #bbb;vertical-align:top">'+lbl(label)+val(value,sz)+'</td>';}
-  function shdr(t){return'<tr><td colspan="99" style="background:#222;color:#fff;font-size:6.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.09em;padding:3px 7px">'+t+'</td></tr>';}
+  function shdr(t){
+    return'<tr><td colspan="99" style="background:#333;color:#fff;font-size:6pt;font-weight:bold;'
+    +'text-transform:uppercase;letter-spacing:.1em;padding:3px 7px">'+t+'</td></tr>';
+  }
+  function lcell(w,label,value){
+    return'<td style="width:'+w+';padding:3px 7px;border:1px solid #ccc;vertical-align:top">'
+    +'<div style="font-size:5.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#666;margin-bottom:1px">'+label+'</div>'
+    +'<div style="font-size:8pt;font-weight:bold;line-height:1.3">'+value+'</div></td>';
+  }
 
-  // apparatus
+  // Apparatus rows
   var appRows="";
   if(activeApp.length){
     activeApp.forEach(function(a){
       var dB=(F.apparatusDriver||{})[a],dP=dB?PERSONNEL.find(function(p){return p.badge===dB;}):null;
-      appRows+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;width:40%;background:#f8f8f8">'+a+'</td>'
-        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'+( dP?dP.name+" #"+dP.badge:"")+'</td></tr>';
+      appRows+='<tr>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;width:40%;background:#f9f9f9">'+a+'</td>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'+(dP?dP.name+" #"+dP.badge:"")+'</td>'
+        +'</tr>';
     });
   } else {
-    appRows='<tr><td colspan="2" style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;color:#999">None</td></tr>';
+    appRows='<tr><td colspan="2" style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;color:#aaa">None</td></tr>';
   }
 
-  // personnel — 2 col
+  // Personnel rows — 2 columns
   var persRows="";
   if(selPers.length){
     var h2=Math.ceil(selPers.length/2);
     for(var r=0;r<h2;r++){
       var a=selPers[r],b=selPers[r+h2];
-      persRows+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt;width:50%">'+a.name
+      persRows+='<tr>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt;width:50%">'+a.name
         +' <span style="font-size:6.5pt;color:#555">#'+a.badge+(a.qual?" · "+a.qual.toUpperCase():"")+'</span></td>'
-        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'+( b?b.name+' <span style="font-size:6.5pt;color:#555">#'+b.badge+(b.qual?" · "+b.qual.toUpperCase():"")+'</span>':"")
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'
+        +(b?b.name+' <span style="font-size:6.5pt;color:#555">#'+b.badge+(b.qual?" · "+b.qual.toUpperCase():"")+'</span>':"")
         +'</td></tr>';
     }
   } else {
-    persRows='<tr><td colspan="2" style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;color:#999">None selected</td></tr>';
+    persRows='<tr><td colspan="2" style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;color:#aaa">None selected</td></tr>';
   }
 
-  // CSS — everything fixed, no flex except body fill
-  var CSS=[
-    "@page{size:8.5in 11in;margin:0}",
-    "*{box-sizing:border-box;margin:0;padding:0}",
-    "html{height:11in;width:8.5in}",
-    "body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#111;",
-      "width:8.5in;height:11in;overflow:hidden;position:relative;background:#fff}",
-    "table{border-collapse:collapse;width:100%}",
-    "th{text-align:left}",
-    // fixed header 0.6in
-    "#hdr{position:absolute;top:0;left:0;right:0;height:0.6in;",
-      "background:#111;color:#fff;padding:0 0.4in;",
-      "display:table;width:100%}",
-    "#hdr-inner{display:table-row}",
-    "#hdr-left{display:table-cell;vertical-align:middle}",
-    "#hdr-right{display:table-cell;vertical-align:middle;text-align:right}",
-    // fixed footer 0.3in
-    "#ftr{position:absolute;bottom:0;left:0;right:0;height:0.28in;",
-      "background:#111;color:#fff;padding:0 0.4in;",
-      "display:table;width:100%}",
-    "#ftr-inner{display:table-row}",
-    "#ftr-left{display:table-cell;vertical-align:middle;font-size:6.5pt;color:#ccc}",
-    "#ftr-right{display:table-cell;vertical-align:middle;text-align:right;font-size:7pt}",
-    // content area between header and footer
-    "#content{position:absolute;top:0.6in;bottom:0.28in;left:0;right:0;",
-      "padding:0.1in 0.38in 0.08in;overflow:hidden}",
-    // remarks fills remaining vertical space
-    "#rmk-cell{height:0.7in;padding:4px 7px;border:1px solid #bbb;",
-      "font-size:7.5pt;line-height:1.4;white-space:pre-wrap;vertical-align:top;",
-      "background:#fff}",
-    ".sec-row td{background:#444;color:#fff;font-size:6pt;font-weight:bold;",
-      "text-transform:uppercase;letter-spacing:.1em;padding:2px 7px}",
-    ".sub-hdr{font-size:6pt;font-weight:bold;text-transform:uppercase;",
-      "letter-spacing:.08em;color:#444;border-bottom:1.5px solid #444;",
-      "padding-bottom:1px;margin-bottom:2px}",
-    ".lbl-sm{font-size:5.5pt;font-weight:bold;text-transform:uppercase;",
-      "letter-spacing:.05em;color:#555;display:block;margin-bottom:1px}",
-    ".val-lg{font-size:8.5pt;font-weight:bold;display:block}",
-    ".val-md{font-size:7.5pt;font-weight:bold;display:block}",
-  ].join("");
+  // ── Build output — body content only, no <html><head><body> tags ──
+  var H='';
 
-  var H="<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>"+CSS+"</style></head><body>";
+  // Inject scoped styles via a <style> block inside the div
+  H+='<style>'
+  +'#afr-pdf{font-family:Arial,Helvetica,sans-serif;font-size:8pt;color:#111;width:7.5in;}'
+  +'#afr-pdf table{border-collapse:collapse;width:100%}'
+  +'#afr-pdf th{text-align:left}'
+  +'</style>';
 
-  // ── HEADER ───────────────────────────────────────────────
-  H+='<div id="hdr"><div id="hdr-inner">';
-  H+='<div id="hdr-left">';
-  H+='<div style="font-size:15pt;font-weight:bold;letter-spacing:.03em;line-height:1">AURELIUS FIRE &amp; RESCUE</div>';
-  H+='<div style="font-size:7pt;color:#aaa;margin-top:2px">Incident Run Report</div>';
-  H+='</div>';
-  H+='<div id="hdr-right">';
-  H+='<div style="font-size:14pt;font-weight:bold;letter-spacing:.04em">'+( F.runNum||"—")+'</div>';
-  H+='<div style="font-size:8pt;color:#aaa">'+( F.date||"—")+'</div>';
-  H+='</div></div></div>';
+  H+='<div id="afr-pdf">';
 
-  // ── CONTENT ──────────────────────────────────────────────
-  H+='<div id="content">';
+  // HEADER BAR
+  H+='<table style="background:#222;margin-bottom:5px">'
+    +'<tr>'
+    +'<td style="padding:8px 12px;color:#fff">'
+    +'<div style="font-size:15pt;font-weight:bold;letter-spacing:.03em;line-height:1">AURELIUS FIRE &amp; RESCUE</div>'
+    +'<div style="font-size:7pt;color:#aaa;margin-top:2px">Incident Run Report</div>'
+    +'</td>'
+    +'<td style="padding:8px 12px;color:#fff;text-align:right;vertical-align:middle">'
+    +'<div style="font-size:14pt;font-weight:bold">'+(F.runNum||"—")+'</div>'
+    +'<div style="font-size:8pt;color:#aaa">'+(F.date||"—")+'</div>'
+    +'</td>'
+    +'</tr>'
+    +'</table>';
 
-  // Row 1 — Incident info
-  H+='<table style="margin-bottom:3px;border:1px solid #bbb"><tbody>';
-  H+='<tr class="sec-row"><td colspan="4">Incident Information</td></tr>';
+  // INCIDENT INFO
+  H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
+  H+=shdr('Incident Information');
   H+='<tr>';
-  H+=cell("26%","Incident Commander",icName,"8.5pt");
-  H+=cell("20%","Dispatch Type",dispText,"7.5pt");
-  H+=cell("16%","Location",locEntry?locEntry.label:"—","7.5pt");
-  H+=cell("38%","Address",F.address||"—","7.5pt");
+  H+=lcell("26%","Incident Commander",icName);
+  H+=lcell("20%","Dispatch Type",dispText);
+  H+=lcell("16%","Location",locEntry?locEntry.label:"—");
+  H+=lcell("38%","Address",F.address||"—");
   H+='</tr>';
   if(F.dispActual){
-    H+='<tr><td colspan="4" style="padding:2px 7px;border:1px solid #ddd;font-size:7pt;color:#444">';
-    H+='<span style="font-weight:bold">Dispatch: </span>'+F.dispActual+'</td></tr>';
+    H+='<tr><td colspan="4" style="padding:2px 7px;border:1px solid #ddd;font-size:7pt;color:#444">'
+      +'<b>Dispatch:</b> '+F.dispActual+'</td></tr>';
   }
   H+='</tbody></table>';
 
-  // Row 2 — Times
-  H+='<table style="margin-bottom:3px;border:1px solid #bbb"><tbody>';
-  H+='<tr class="sec-row"><td colspan="10">Response Times</td></tr>';
+  // RESPONSE TIMES
+  H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
+  H+=shdr('Response Times');
   H+='<tr>';
-  var times=[["Dispatched",F.disp,""],["Enroute",F.enroute,td(F.disp,F.enroute)],
-    ["Arrived",F.arrived,td(F.enroute,F.arrived)],["Cleared",F.clear,td(F.arrived,F.clear)],
-    ["In Quarters",F.inQ,td(F.clear,F.inQ)]];
-  times.forEach(function(t){
-    H+='<td style="width:20%;text-align:center;padding:3px 3px;border:1px solid #ddd">';
-    H+='<span class="lbl-sm">'+t[0]+'</span>';
-    H+='<span style="font-size:13pt;font-weight:bold;display:block;line-height:1.1">'+( t[1]||"—")+'</span>';
-    H+='<span style="font-size:6pt;color:#555;display:block">'+t[2]+'&nbsp;</span>';
-    H+='</td>';
+  [["Dispatched",F.disp,""],["Enroute",F.enroute,td(F.disp,F.enroute)],
+   ["Arrived",F.arrived,td(F.enroute,F.arrived)],["Cleared",F.clear,td(F.arrived,F.clear)],
+   ["In Quarters",F.inQ,td(F.clear,F.inQ)]].forEach(function(t){
+    H+='<td style="width:20%;text-align:center;padding:3px 4px;border:1px solid #ddd">'
+      +'<div style="font-size:5.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#666">'+t[0]+'</div>'
+      +'<div style="font-size:13pt;font-weight:bold;line-height:1.1">'+(t[1]||"—")+'</div>'
+      +'<div style="font-size:6pt;color:#555">'+t[2]+'&nbsp;</div>'
+      +'</td>';
   });
   H+='</tr>';
-  // Stats sub-row
-  H+='<tr style="background:#f5f5f5">';
-  var stats=[["Total Call Time",callMins!==null?fmtDur(callMins):"—"],
-    ["Personnel",String(totalPers)],["Personnel Hours",persHours?persHours+" hrs":"—"],
-    ["EMTs",String(F.emtCt||autoEmt)],["Interior FF",String(F.intCt||autoInt)]];
-  stats.forEach(function(s){
-    H+='<td style="width:20%;text-align:center;padding:2px 3px;border:1px solid #ddd">';
-    H+='<span class="lbl-sm">'+s[0]+'</span>';
-    H+='<span style="font-size:9pt;font-weight:bold;display:block;line-height:1.1">'+s[1]+'</span>';
-    H+='</td>';
+  H+='<tr style="background:#f8f8f8">';
+  [["Total Call Time",callMins!==null?fmtDur(callMins):"—"],
+   ["Personnel",String(totalPers)],
+   ["Personnel Hours",persHours?persHours+" hrs":"—"],
+   ["EMTs",String(F.emtCt||autoEmt)],
+   ["Interior FF",String(F.intCt||autoInt)]].forEach(function(s){
+    H+='<td style="width:20%;text-align:center;padding:3px 4px;border:1px solid #ddd">'
+      +'<div style="font-size:5.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#666">'+s[0]+'</div>'
+      +'<div style="font-size:9.5pt;font-weight:bold;line-height:1.1">'+s[1]+'</div>'
+      +'</td>';
   });
   H+='</tr></tbody></table>';
 
-  // Row 3 — Apparatus + Personnel side by side
-  H+='<table style="margin-bottom:3px"><tr valign="top">';
-  // Apparatus col
-  H+='<td style="width:42%;padding-right:4px">';
-  H+='<table style="border:1px solid #bbb"><tbody>';
-  H+='<tr class="sec-row"><td colspan="2">Apparatus Responding</td></tr>';
-  H+=appRows;
-  H+='</tbody></table></td>';
-  // Personnel col
-  H+='<td style="padding-left:4px">';
-  H+='<table style="border:1px solid #bbb"><tbody>';
-  H+='<tr class="sec-row"><td colspan="2">Personnel on Scene &mdash; '+selPers.length+' members</td></tr>';
-  H+=persRows;
-  H+='</tbody></table></td>';
+  // APPARATUS + PERSONNEL
+  H+='<table style="margin-bottom:4px"><tr valign="top">';
+  H+='<td style="width:42%;padding-right:4px">'
+    +'<table style="border:1px solid #ccc"><tbody>'
+    +shdr('Apparatus Responding')
+    +appRows
+    +'</tbody></table></td>';
+  H+='<td style="padding-left:4px">'
+    +'<table style="border:1px solid #ccc"><tbody>'
+    +shdr('Personnel on Scene ('+selPers.length+')')
+    +persRows
+    +'</tbody></table></td>';
   H+='</tr></table>';
 
-  // Row 4 — Vehicles (only if filled)
+  // VEHICLES
   if(filledCars.length){
-    H+='<table style="margin-bottom:3px;border:1px solid #bbb"><tbody>';
-    H+='<tr class="sec-row"><td colspan="4">Vehicles Involved</td></tr>';
-    H+='<tr style="background:#f5f5f5">';
-    H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:22px">#</th>';
-    H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">Year / Make / Model</th>';
-    H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:18%">Plate</th>';
-    H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:14%">Color</th></tr>';
+    H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
+    H+=shdr('Vehicles Involved');
+    H+='<tr style="background:#f8f8f8">'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:22px">#</th>'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">Year / Make / Model</th>'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:18%">Plate</th>'
+      +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:14%">Color</th>'
+      +'</tr>';
     filledCars.forEach(function(c,i){
-      H+='<tr><td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;text-align:center">'+( i+1)+'</td>';
-      H+='<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+( c.model||"—")+'</td>';
-      H+='<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+( c.plate||"—")+'</td>';
-      H+='<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+( c.color||"—")+'</td></tr>';
+      H+='<tr>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;text-align:center">'+(i+1)+'</td>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(c.model||"—")+'</td>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(c.plate||"—")+'</td>'
+        +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(c.color||"—")+'</td>'
+        +'</tr>';
     });
     H+='</tbody></table>';
   }
 
-  // Row 5 — Law + EMS (only if filled)
+  // LAW + EMS
   if(usedLaw.length||usedAmbs.length){
-    H+='<table style="margin-bottom:3px"><tr valign="top">';
+    H+='<table style="margin-bottom:4px"><tr valign="top">';
     if(usedLaw.length){
-      H+='<td style="width:50%;padding-right:4px">';
-      H+='<table style="border:1px solid #bbb"><tbody>';
-      H+='<tr class="sec-row"><td colspan="2">Law Enforcement</td></tr>';
+      H+='<td style="width:50%;padding-right:4px">'
+        +'<table style="border:1px solid #ccc"><tbody>'
+        +shdr('Law Enforcement');
       usedLaw.forEach(function(l,i){
-        H+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">';
-        H+='<span style="font-weight:bold;color:#444;margin-right:5px">'+( i+1)+'.</span>'+l+'</td></tr>';
+        H+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'
+          +'<span style="font-weight:bold;color:#444;margin-right:5px">'+(i+1)+'.</span>'+l+'</td></tr>';
       });
       H+='</tbody></table></td>';
     }
     if(usedAmbs.length){
-      H+='<td style="'+( usedLaw.length?"padding-left:4px":"")+'">';
-      H+='<table style="border:1px solid #bbb"><tbody>';
-      H+='<tr class="sec-row"><td colspan="3">EMS / Ambulances</td></tr>';
-      H+='<tr style="background:#f5f5f5">';
-      H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:18px">#</th>';
-      H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">Service</th>';
-      H+='<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">PCR #</th></tr>';
+      H+='<td style="'+(usedLaw.length?"padding-left:4px":"")+'">'
+        +'<table style="border:1px solid #ccc"><tbody>'
+        +shdr('EMS / Ambulances')
+        +'<tr style="background:#f8f8f8">'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:22px">#</th>'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">Service</th>'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:30%">PCR #</th>'
+        +'</tr>';
       usedAmbs.forEach(function(a,i){
-        H+='<tr><td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;text-align:center">'+( i+1)+'</td>';
-        H+='<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+( ambName(a)||"—")+'</td>';
-        H+='<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+( a.pcr||"—")+'</td></tr>';
+        H+='<tr>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;text-align:center">'+(i+1)+'</td>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(ambName(a)||"—")+'</td>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(a.pcr||"—")+'</td>'
+          +'</tr>';
       });
       H+='</tbody></table>';
       if(usedRef.length) H+='<div style="font-size:7pt;padding:2px 5px;color:#555"><b>Refused PCR:</b> '+usedRef.join(", ")+'</div>';
@@ -2214,37 +2194,42 @@ function buildPrintHTML() {
     H+='</tr></table>';
   }
 
-  // Mutual aid
+  // MUTUAL AID
   if(mutList.length){
-    H+='<div style="font-size:7.5pt;padding:2px 6px;margin-bottom:3px;border-left:3px solid #555">';
-    H+='<b>Mutual Aid'+( F.mutualDir?" ("+F.mutualDir+")":"")+':</b> '+mutList.join(" · ")+'</div>';
+    H+='<div style="font-size:7.5pt;padding:2px 7px;margin-bottom:4px;border-left:3px solid #555">'
+      +'<b>Mutual Aid'+(F.mutualDir?" ("+F.mutualDir+")":"")+":</b> "+mutList.join(" · ")
+      +'</div>';
   }
 
-  // Row 6 — Remarks (fixed height, fills remaining space)
-  H+='<table style="width:100%;border:1px solid #bbb;margin-bottom:3px"><tbody>';
-  H+='<tr class="sec-row"><td>Remarks</td></tr>';
-  H+='<tr><td id="rmk-cell">'+( F.remarks||"")+'</td></tr>';
-  H+='</tbody></table>';
+  // REMARKS
+  H+='<table style="width:100%;border:1px solid #ccc;margin-bottom:4px"><tbody>'
+    +shdr('Remarks')
+    +'<tr><td style="padding:5px 7px;font-size:7.5pt;line-height:1.4;white-space:pre-wrap;'
+    +'min-height:60px;vertical-align:top">'+(F.remarks||"")+'</td></tr>'
+    +'</tbody></table>';
 
-  // Injured
+  // INJURED
   if(F.injName){
     var injP=PERSONNEL.find(function(p){return p.badge===F.injName;});
-    H+='<div style="font-size:7.5pt;padding:3px 7px;border:1px solid #bbb;border-left:3px solid #333">';
-    H+='<b>Personnel Injured:</b> '+( injP?injP.name:F.injName)+' #'+F.injName;
-    H+=' &nbsp;&nbsp; <b>Report Filed:</b> '+( F.rptFiled||"—")+'</div>';
+    H+='<div style="font-size:7.5pt;padding:3px 7px;margin-bottom:4px;border:1px solid #ccc;border-left:3px solid #555">'
+      +'<b>Personnel Injured:</b> '+(injP?injP.name:F.injName)+' #'+F.injName
+      +' &nbsp;&nbsp; <b>Report Filed:</b> '+(F.rptFiled||"—")
+      +'</div>';
   }
 
-  H+='</div>'; // #content
+  // FOOTER BAR
+  H+='<table style="background:#222;margin-top:4px">'
+    +'<tr>'
+    +'<td style="padding:5px 12px;color:#aaa;font-size:6.5pt">'
+    +'Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Run Report '+(F.runNum||"")
+    +' &nbsp;|&nbsp; IC: '+icName+'</td>'
+    +'<td style="padding:5px 12px;color:#fff;font-size:7pt;text-align:right;vertical-align:middle">'
+    +(sigName?sigName+"&nbsp;&nbsp;":"__________________________")
+    +(F.signature?'<img src="'+F.signature+'" style="height:18px;vertical-align:middle;margin-left:6px;background:#fff;padding:1px 3px">':"")
+    +'</td>'
+    +'</tr></table>';
 
-  // ── FOOTER ───────────────────────────────────────────────
-  H+='<div id="ftr"><div id="ftr-inner">';
-  H+='<div id="ftr-left">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Run Report '+( F.runNum||"")+' &nbsp;|&nbsp; IC: '+icName+'</div>';
-  var sigCell="";
-  if(F.signature) sigCell+='<img src="'+F.signature+'" style="height:18px;vertical-align:middle;margin-left:6px;background:#fff;padding:1px 3px">';
-  H+='<div id="ftr-right">'+( sigName?sigName+"&nbsp;&nbsp;":"___________________________")+sigCell+'</div>';
-  H+='</div></div>';
-
-  H+='</body></html>';
+  H+='</div>'; // #afr-pdf
   return H;
 }
 
@@ -2367,31 +2352,18 @@ function generatePDF() {
     alert('PDF library not loaded. Please check your internet connection.');
     return;
   }
+  const container = document.getElementById('print-form');
+  container.innerHTML = buildPrintHTML();
+  container.style.display = 'block';
   const fn = `AureliusRunReport_${(F.runNum||'').replace(/[^a-z0-9]/gi,'_')}_${(F.date||'').replace(/-/g,'')}.pdf`;
-  const htmlStr = buildPrintHTML();
-
-  // Build in a hidden iframe so full HTML document renders correctly
-  let iframe = document.getElementById('pdf-iframe');
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.id = 'pdf-iframe';
-    iframe.style.cssText = 'position:fixed;top:0;left:0;width:8.5in;height:11in;border:none;visibility:hidden;z-index:-1';
-    document.body.appendChild(iframe);
-  }
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(htmlStr);
-  iframe.contentDocument.close();
-
-  setTimeout(function() {
-    html2pdf().set({
-      margin: 0,
-      filename: fn,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 816, windowHeight: 1056 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-      pagebreak: { mode: ['legacy'] }
-    }).from(iframe.contentDocument.body).save();
-  }, 400);
+  html2pdf().set({
+    margin: 0.3,
+    filename: fn,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'] }
+  }).from(container).save().then(() => { container.style.display = 'none'; });
 }
 
 function generateBlankPDF() {
@@ -2422,29 +2394,23 @@ async function generateAndShare() {
   const statusEl = document.getElementById('share-status');
   if (statusEl) { statusEl.textContent = '⏳ Generating PDF…'; statusEl.style.display = 'block'; }
 
-  // Build in hidden iframe so full HTML document renders correctly
-  let iframe = document.getElementById('pdf-iframe');
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.id = 'pdf-iframe';
-    iframe.style.cssText = 'position:fixed;top:0;left:0;width:8.5in;height:11in;border:none;visibility:hidden;z-index:-1';
-    document.body.appendChild(iframe);
-  }
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(buildPrintHTML());
-  iframe.contentDocument.close();
+  const container = document.getElementById('print-form');
+  container.innerHTML = buildPrintHTML();
+  container.style.display = 'block';
 
-  await new Promise(r => setTimeout(r, 400));
+  await new Promise(r => setTimeout(r, 200));
 
   try {
     const pdfBlob = await html2pdf().set({
-      margin: 0,
+      margin: 0.3,
       filename: fn,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, windowWidth: 816, windowHeight: 1056 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-      pagebreak: { mode: ['legacy'] }
-    }).from(iframe.contentDocument.body).outputPdf('blob');
+      pagebreak: { mode: ['css', 'legacy'] }
+    }).from(container).outputPdf('blob');
+
+    container.style.display = 'none';
 
     const pdfFile = new File([pdfBlob], fn, { type: 'application/pdf' });
 
