@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Aurelius Fire & Rescue — Run Report</title>
+  <title>Aurelius Fire & Rescue — Incident Report</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -233,7 +233,7 @@
 <div id="app-header">
   <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
     <div>
-      <div id="header-eyebrow">Run Report</div>
+      <div id="header-eyebrow">Incident Report</div>
       <div id="header-title">Aurelius Fire &amp; Rescue</div>
       <div id="header-sub">Loading…</div>
     </div>
@@ -822,7 +822,14 @@ function tabIncident() {
     el.className = 'inp';
     el.value = value || '';
     el.setAttribute('inputmode', 'numeric');
-    Object.assign(el.style, UNI, { textAlign: 'left', justifyContent: 'flex-start' });
+    Object.assign(el.style, UNI, {
+      textAlign: 'left',
+      WebkitAppearance: 'none',
+      appearance: 'none',
+      minHeight: '46px',
+      maxHeight: '46px',
+      lineHeight: 'normal',
+    });
     el.addEventListener('change', e => onChange(e.target.value));
     return el;
   }
