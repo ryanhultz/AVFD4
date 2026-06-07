@@ -136,18 +136,6 @@
     .btn-print { width:100%; background:#8b0000; color:#fff; border:none; border-radius:10px; padding:15px 0; font-size:17px; font-weight:700; letter-spacing:0.05em; margin-bottom:10px; }
     .btn-clear { width:100%; background:none; color:#aaa; border:1px solid #ddd; border-radius:8px; padding:8px 0; font-size:12px; margin-bottom:30px; }
 
-    /* ── Preview summary ── */
-    #preview-summary {
-      border: 1px solid #ccc; border-radius: 6px;
-      padding: 10px; background: #fafafa;
-      font-size: 12px; line-height: 1.7;
-    }
-    #preview-summary .ps-title {
-      font-weight: 700; font-size: 13px;
-      border-bottom: 1px solid #ccc;
-      margin-bottom: 6px; padding-bottom: 3px;
-    }
-
     /* ════════════════════════════════
        PRINT FORM — hidden on screen
        ════════════════════════════════ */
@@ -249,11 +237,11 @@
       <div id="header-title">Aurelius Fire &amp; Rescue</div>
       <div id="header-sub">Loading…</div>
     </div>
-    <button id="reload-btn" title="Reload personnel roster" onclick="reloadPersonnel()"
+    <button id="newreport-btn" title="Start a new report" onclick="newReport()"
       style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);
              color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
              white-space:nowrap;margin-top:6px;flex-shrink:0;font-family:Georgia,serif">
-      🔄 Reload Roster
+      ➕ New Report
     </button>
   </div>
   <div id="tab-bar"></div>
@@ -374,10 +362,10 @@ const LOCATIONS = [
 ];
 
 const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
-const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVA","EMS","Law","Remarks","Preview"];
+const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVA","EMS","Law","Remarks","Finalize"];
 
 const EMPTY = {
-  date:"", runNum:"15-", ic:"", enteredBy:"", badge:"", entryDate:"",
+  date:"", runNum:"", ic:"", enteredBy:"", badge:"", entryDate:"",
   disp:"", enroute:"", arrived:"", clear:"", inQ:"",
   dispType:"", dispDetail:"", dispActual:"", locCode:"", address:"",
   apparatus:{}, apparatusDriver:{}, personnel:{},
@@ -436,6 +424,9 @@ function loadForm() {
   if (typeof data.personnel !== 'object' || Array.isArray(data.personnel)) data.personnel = {};
   if (typeof data.apparatusDriver !== 'object' || Array.isArray(data.apparatusDriver)) data.apparatusDriver = {};
 
+  // ensure a stable id for history tracking
+  if (!data._id) data._id = 'r' + Date.now();
+
   return data;
 }
 
@@ -443,15 +434,87 @@ function saveForm() {
   try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
 }
 
-function clearForm() {
-  if (!confirm("Clear all form data and start fresh?")) return;
-  F = Object.assign({}, EMPTY,{
+// Build a fresh empty report object
+function blankReport() {
+  return Object.assign({}, EMPTY, {
     amb:[{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""}],
     refusedPcr:["","",""],
     law:["","",""],
     cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
-    apparatus:{}, personnel:{},
+    apparatus:{}, apparatusDriver:{}, personnel:{}, mutual:[],
   });
+}
+
+// ── Report history (keeps the last 10 saved reports) ──────
+function getHistory() {
+  try {
+    const s = localStorage.getItem("afr_history");
+    const arr = s ? JSON.parse(s) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch(e) { return []; }
+}
+
+function setHistory(arr) {
+  try { localStorage.setItem("afr_history", JSON.stringify(arr.slice(0,10))); } catch(e) {}
+}
+
+// Returns true if the current report has any meaningful data worth saving
+function reportHasData() {
+  if (F.runNum || F.date || F.ic || F.address || F.remarks) return true;
+  if (Object.keys(F.personnel||{}).length) return true;
+  if (Object.keys(F.apparatus||{}).length) return true;
+  if (F.disp || F.enroute || F.arrived) return true;
+  return false;
+}
+
+// Archive the current report into history (newest first), dedupe by id
+function archiveCurrent() {
+  if (!reportHasData()) return;
+  const hist = getHistory();
+  // ensure the current report has a stable id
+  if (!F._id) F._id = 'r' + Date.now();
+  F._saved = Date.now();
+  // remove any existing copy with the same id, then prepend
+  const filtered = hist.filter(r => r._id !== F._id);
+  filtered.unshift(JSON.parse(JSON.stringify(F)));
+  setHistory(filtered);
+}
+
+// Start a brand-new report (archives the current one first)
+function newReport() {
+  if (reportHasData() && !confirm("Start a new report? The current report will be saved to history first.")) return;
+  archiveCurrent();
+  F = blankReport();
+  F._id = 'r' + Date.now();
+  tab = 0;
+  try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
+  render();
+}
+
+// Load a report from history into the active form
+function loadFromHistory(id) {
+  const hist = getHistory();
+  const found = hist.find(r => r._id === id);
+  if (!found) return;
+  // archive whatever is currently open first (if it has data and isn't the same report)
+  if (reportHasData() && F._id !== id) archiveCurrent();
+  F = Object.assign(blankReport(), JSON.parse(JSON.stringify(found)));
+  tab = 0;
+  try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
+  render();
+}
+
+// Delete a report from history
+function deleteFromHistory(id) {
+  if (!confirm("Delete this report from history? This cannot be undone.")) return;
+  setHistory(getHistory().filter(r => r._id !== id));
+  render();
+}
+
+function clearForm() {
+  if (!confirm("Clear all form data and start fresh?")) return;
+  F = blankReport();
+  F._id = 'r' + Date.now();
   try { localStorage.removeItem("afr_v4"); } catch(e) {}
   render();
 }
@@ -780,7 +843,7 @@ function tabIncident() {
   // ── Incident Info card ──────────────────────────────────
   const infoCard = card('Incident Info',
     field('Date',                dateInp(F.date,       v=>{F.date=v;      saveForm();updateHeader();}), 10),
-    field('Run Report #',        textInp(F.runNum,     v=>{F.runNum=v;    saveForm();updateHeader();}, '15-0602'), 10),
+    field('Incident Number',     textInp(F.runNum,     v=>{F.runNum=v;    saveForm();updateHeader();}, 'e.g. 25-0142'), 10),
     field('Incident Commander',  persDropdown(F.ic,    v=>{F.ic=v;        saveForm();}), 0)
   );
   wrap.appendChild(infoCard);
@@ -1866,81 +1929,7 @@ function tabRemarks() {
 }
 
 function tabPreview() {
-  const selCount = PERSONNEL.filter(p=>F.personnel[p.badge]).length;
-  const dispEntry = [...DISPATCH_TYPES,...DISPATCH_SPECIAL].find(d=>d.code===F.dispType);
-  const locEntry = LOCATIONS.find(l=>l.code===F.locCode);
-  const icName = (PERSONNEL.find(p=>p.badge===F.ic)||{name:F.ic||'—'}).name;
-  const autoEmt = PERSONNEL.filter(p=>F.personnel[p.badge]&&p.qual&&p.qual.includes('emt')).length;
-  const autoInt = PERSONNEL.filter(p=>F.personnel[p.badge]&&p.qual&&p.qual.includes('int')).length;
-
-  // Calculate call time
-  function parseMin(t) {
-    if (!t) return null;
-    const p = t.split(':');
-    const h = parseInt(p[0]||0), m = parseInt(p[1]||0);
-    return isNaN(h)||isNaN(m) ? null : h*60+m;
-  }
-  const tDisp = parseMin(F.disp), tInQ = parseMin(F.inQ);
-  let callMins = null;
-  if (tDisp !== null && tInQ !== null) { callMins = tInQ - tDisp; if (callMins < 0) callMins += 1440; }
-  const totalPers = parseInt(F.totalCt) || selCount;
-  const persHours = callMins !== null && totalPers > 0 ? ((callMins * totalPers) / 60).toFixed(1) : null;
-
   const wrap = document.createElement('div');
-
-  // Summary card built with DOM (no nested template literals)
-  const summary = document.createElement('div');
-  summary.id = 'preview-summary';
-  const rows = [
-    ['Run #', F.runNum||'—', 'Date', F.date||'—'],
-    ['IC', icName],
-    ['Dispatch → Arr → Clear', (F.disp||'—') + ' → ' + (F.arrived||'—') + ' → ' + (F.clear||'—')],
-    ['Type', dispEntry ? dispEntry.label + (F.dispDetail ? ' – ' + F.dispDetail : '') : '—'],
-    ['Location', locEntry ? locEntry.code + ' ' + locEntry.label : '—'],
-    ['Address', F.address||'—'],
-    ['Apparatus', APPARATUS.filter(a=>F.apparatus[a]).join(', ')||'None'],
-    ['Personnel', selCount + ' selected · EMTs ' + (F.emtCt||autoEmt) + ' · Interior ' + (F.intCt||autoInt) + ' · Total ' + (F.totalCt||selCount)],
-    ['Call Time', callMins !== null ? Math.floor(callMins/60) + 'h ' + (callMins%60) + 'm' : '—',
-     'Personnel Hours', persHours !== null ? persHours + ' hrs' : '—'],
-  ];
-
-  const title = document.createElement('div');
-  title.className = 'ps-title';
-  title.textContent = 'AURELIUS FIRE AND RESCUE — Summary';
-  summary.appendChild(title);
-
-  for (const row of rows) {
-    const d = document.createElement('div');
-    d.style.marginBottom = '2px';
-    for (let i = 0; i < row.length; i += 2) {
-      const b = document.createElement('b');
-      b.textContent = row[i] + ': ';
-      d.appendChild(b);
-      d.appendChild(document.createTextNode(row[i+1] || ''));
-      if (i + 2 < row.length) d.appendChild(document.createTextNode(' \u00a0 '));
-    }
-    summary.appendChild(d);
-  }
-
-  const ambList = (F.amb||[]).filter(a=>a.svc).map(a=>a.svc==='Other'?a.custom||'Other':a.svc);
-  if (ambList.length) {
-    const d = document.createElement('div');
-    const b = document.createElement('b');
-    b.textContent = 'Ambulance: ';
-    d.appendChild(b);
-    d.appendChild(document.createTextNode(ambList.join(', ')));
-    summary.appendChild(d);
-  }
-  if (F.remarks) {
-    const d = document.createElement('div');
-    const b = document.createElement('b');
-    b.textContent = 'Remarks: ';
-    d.appendChild(b);
-    d.appendChild(document.createTextNode(F.remarks.slice(0,100) + (F.remarks.length>100?'…':'')));
-    summary.appendChild(d);
-  }
-
-  wrap.appendChild(card('Ready to Print', summary));
 
   const btn = document.createElement('button');
   btn.className = 'btn-print';
@@ -1963,6 +1952,70 @@ function tabPreview() {
   btn2.style.marginTop = '0';
   btn2.addEventListener('click', generateBlankPDF);
   wrap.appendChild(btn2);
+
+  // ── Reload Roster button ─────────────────────────────────
+  const btnReload = document.createElement('button');
+  btnReload.className = 'btn-print';
+  btnReload.textContent = '🔄 Reload Roster';
+  btnReload.style.background = '#2d6a2d';
+  btnReload.style.marginTop = '14px';
+  btnReload.addEventListener('click', reloadPersonnel);
+  wrap.appendChild(btnReload);
+
+  // ── Report History card ──────────────────────────────────
+  const hist = getHistory();
+  const histCard = document.createElement('div');
+  histCard.className = 'card';
+  const histTitle = document.createElement('div');
+  histTitle.className = 'card-title';
+  histTitle.textContent = 'Report History (last 10)';
+  const histBody = document.createElement('div');
+  histBody.className = 'card-body';
+
+  if (!hist.length) {
+    const none = document.createElement('div');
+    none.style.cssText = 'font-size:13px;color:#888;padding:4px 0';
+    none.textContent = 'No saved reports yet. Reports are saved here automatically when you generate a PDF or start a new report.';
+    histBody.appendChild(none);
+  } else {
+    hist.forEach(r => {
+      const icn = (PERSONNEL.find(p=>p.badge===r.ic)||{name:r.ic||''}).name;
+      const isCurrent = r._id === F._id;
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0e8d8';
+
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1;min-width:0';
+      const line1 = document.createElement('div');
+      line1.style.cssText = 'font-size:14px;font-weight:700;color:#1a1a1a';
+      line1.textContent = (r.runNum || '(no incident #)') + (isCurrent ? '  • current' : '');
+      const line2 = document.createElement('div');
+      line2.style.cssText = 'font-size:11px;color:#888';
+      const savedDate = r._saved ? new Date(r._saved).toLocaleString() : '';
+      line2.textContent = [r.date||'no date', icn?('IC '+icn):'', savedDate].filter(Boolean).join('  ·  ');
+      info.appendChild(line1);
+      info.appendChild(line2);
+      row.appendChild(info);
+
+      const openBtn = document.createElement('button');
+      openBtn.textContent = 'Open';
+      openBtn.style.cssText = 'background:#8b0000;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;font-family:Georgia,serif;flex-shrink:0';
+      openBtn.addEventListener('click', () => loadFromHistory(r._id));
+      row.appendChild(openBtn);
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.style.cssText = 'background:none;border:1px solid #c8a97a;color:#8b0000;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;font-family:Georgia,serif;flex-shrink:0';
+      delBtn.addEventListener('click', () => deleteFromHistory(r._id));
+      row.appendChild(delBtn);
+
+      histBody.appendChild(row);
+    });
+  }
+
+  histCard.appendChild(histTitle);
+  histCard.appendChild(histBody);
+  wrap.appendChild(histCard);
 
   return wrap;
 }
@@ -2199,7 +2252,7 @@ function buildPrintHTML() {
 
   // SIGNATURE BAR (footer on page 1)
   H+='<table style="background:#222;margin-top:4px"><tr>'
-    +'<td style="padding:5px 12px;color:#aaa;font-size:6.5pt">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Run Report '+(F.runNum||"")+' &nbsp;|&nbsp; IC: '+icName+'</td>'
+    +'<td style="padding:5px 12px;color:#aaa;font-size:6.5pt">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Incident #'+(F.runNum||"")+' &nbsp;|&nbsp; IC: '+icName+'</td>'
     +'<td style="padding:5px 12px;color:#fff;font-size:7pt;text-align:right;vertical-align:middle">'
     +(sigName?sigName+"&nbsp;&nbsp;":"__________________________")
     +(F.signature?'<img src="'+F.signature+'" style="height:18px;vertical-align:middle;margin-left:6px;background:#fff;padding:1px 3px">':"")
@@ -2253,7 +2306,7 @@ function buildBlankFormHTML() {
   var S='*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:8.5pt;color:#000;background:white}@page{size:letter portrait;margin:0.35in 0.4in}table{border-collapse:collapse;width:100%}.pg{page-break-after:always}.pg:last-child{page-break-after:avoid}.sec{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.09em;border-bottom:1.5px solid #000;padding-bottom:2px;margin:10px 0 5px;page-break-after:avoid}.blk{page-break-inside:avoid}.fl{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:block;margin-top:5px;margin-bottom:2px}.ln{border-bottom:1px solid #888;display:block;min-height:20px}';
 
   function hdr(sub){
-    return '<table style="border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:10px"><tr><td style="font-size:14pt;font-weight:700">AURELIUS FIRE AND RESCUE</td><td style="text-align:right;font-size:9pt;font-weight:700">Run #: ___________&nbsp;&nbsp;Date: ____________</td></tr><tr><td style="font-size:7.5pt;color:#444">'+sub+'</td><td></td></tr></table>';
+    return '<table style="border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:10px"><tr><td style="font-size:14pt;font-weight:700">AURELIUS FIRE AND RESCUE</td><td style="text-align:right;font-size:9pt;font-weight:700">Incident #: ___________&nbsp;&nbsp;Date: ____________</td></tr><tr><td style="font-size:7.5pt;color:#444">'+sub+'</td><td></td></tr></table>';
   }
 
   var html='<!DOCTYPE html><html><head><meta charset="utf-8"><style>'+S+'</style></head><body>';
@@ -2345,6 +2398,7 @@ function generatePDF() {
     alert('PDF library not loaded. Please check your internet connection.');
     return;
   }
+  archiveCurrent(); // save a copy to history
   const container = document.getElementById('print-form');
   container.innerHTML = buildPrintHTML();
   container.style.display = 'block';
@@ -2382,6 +2436,7 @@ async function generateAndShare() {
     alert('PDF library not loaded. Please check your internet connection.');
     return;
   }
+  archiveCurrent(); // save a copy to history
 
   const fn = `AureliusRunReport_${(F.runNum||'').replace(/[^a-z0-9]/gi,'_')}_${(F.date||'').replace(/-/g,'')}.pdf`;
   const statusEl = document.getElementById('share-status');
@@ -2411,8 +2466,8 @@ async function generateAndShare() {
     if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
       if (statusEl) statusEl.style.display = 'none';
       await navigator.share({
-        title: `Run Report ${F.runNum||''} — ${F.date||''}`,
-        text: `Aurelius Fire & Rescue Run Report ${F.runNum||''} dated ${F.date||''}`,
+        title: `Incident ${F.runNum||''} — ${F.date||''}`,
+        text: `Aurelius Fire & Rescue Incident Report ${F.runNum||''} dated ${F.date||''}`,
         files: [pdfFile]
       });
     }
@@ -2425,7 +2480,7 @@ async function generateAndShare() {
       setTimeout(() => URL.revokeObjectURL(url), 5000);
       if (statusEl) { statusEl.textContent = 'PDF downloaded. Opening email…'; }
       setTimeout(() => {
-        window.location.href = `mailto:?subject=${encodeURIComponent('Run Report '+F.runNum+' — '+F.date)}&body=${encodeURIComponent('Aurelius Fire & Rescue Run Report attached.\n\nRun #: '+F.runNum+'\nDate: '+F.date+'\nIC: '+((PERSONNEL.find(p=>p.badge===F.ic)||{name:F.ic||''}).name))}`;
+        window.location.href = `mailto:?subject=${encodeURIComponent('Incident '+F.runNum+' — '+F.date)}&body=${encodeURIComponent('Aurelius Fire & Rescue Incident Report attached.\n\nIncident #: '+F.runNum+'\nDate: '+F.date+'\nIC: '+((PERSONNEL.find(p=>p.badge===F.ic)||{name:F.ic||''}).name))}`;
         if (statusEl) statusEl.style.display = 'none';
       }, 800);
     }
@@ -2585,30 +2640,20 @@ function render() {
 }
 
 // ── Reload personnel roster on demand ──────────────────
-async function reloadPersonnel() {
-  const btn = document.getElementById('reload-btn');
-  const orig = btn.textContent;
-  btn.textContent = '⏳ Loading…';
-  btn.disabled = true;
+async function reloadPersonnel(e) {
+  const btn = (e && e.target) ? e.target : null;
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳ Loading roster…'; btn.disabled = true; }
   try {
     await loadPersonnel();
-    btn.textContent = '✓ Updated!';
-    btn.style.background = 'rgba(45,106,45,0.7)';
-    // Re-render current tab in case Personnel tab is open
-    renderTab();
-    setTimeout(() => {
-      btn.textContent = orig;
-      btn.style.background = 'rgba(255,255,255,0.15)';
-      btn.disabled = false;
-    }, 2000);
-  } catch(e) {
-    btn.textContent = '✗ Failed';
-    btn.style.background = 'rgba(139,0,0,0.5)';
-    setTimeout(() => {
-      btn.textContent = orig;
-      btn.style.background = 'rgba(255,255,255,0.15)';
-      btn.disabled = false;
-    }, 2500);
+    if (btn) { btn.textContent = '✓ Roster Updated!'; }
+    renderTab(); // refresh in case Personnel tab is open
+    if (btn) setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+  } catch(err) {
+    if (btn) {
+      btn.textContent = '✗ Failed';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+    }
   }
 }
 
