@@ -133,8 +133,57 @@
     .btn-save  { flex:1; background:#555; color:#fff; border:none; border-radius:10px; padding:12px 0; font-size:15px; font-weight:700; transition:background 0.2s; }
     .btn-save.saved { background: #2d6a2d; }
     .btn-next  { flex:1; background:#8b0000; color:#fff; border:none; border-radius:10px; padding:12px 0; font-size:15px; font-weight:700; }
-    .btn-print { width:100%; background:#8b0000; color:#fff; border:none; border-radius:10px; padding:15px 0; font-size:17px; font-weight:700; letter-spacing:0.05em; margin-bottom:10px; }
+    .btn-print { width:100%; height:56px; display:flex; align-items:center; justify-content:center; background:#8b0000; color:#fff; border:none; border-radius:10px; padding:0 12px; font-size:17px; font-weight:700; letter-spacing:0.05em; margin-bottom:10px; text-align:center; line-height:1.2; }
     .btn-clear { width:100%; background:none; color:#aaa; border:1px solid #ddd; border-radius:8px; padding:8px 0; font-size:12px; margin-bottom:30px; }
+
+    /* ════════════════════════════════
+       DESKTOP LAYOUT (wide screens)
+       Activates only at 900px+; phones are unaffected.
+       ════════════════════════════════ */
+    @media (min-width: 900px) {
+      body { background: #ece1cd; }
+
+      #app-header { padding: 18px 32px 0; }
+      #header-eyebrow { font-size: 12px; }
+      #header-title   { font-size: 26px; }
+      #header-sub     { font-size: 13px; margin-bottom: 10px; }
+      #newreport-btn  { font-size: 15px !important; padding: 10px 18px !important; margin-top: 10px !important; }
+
+      /* Tab bar: no scroll needed, space the tabs out */
+      #tab-bar { margin: 0 -32px; padding: 0 24px; justify-content: flex-start; }
+      .tab-btn { font-size: 14px; padding: 11px 20px; }
+
+      /* Wider centered content column */
+      #content { max-width: 1000px; padding: 26px 32px; }
+      #tab-content { margin-top: 20px; }
+
+      /* Cards: roomier, two across where they fit */
+      .card { margin-bottom: 20px; border-radius: 12px; }
+      .card-title { font-size: 14px; padding: 10px 18px; }
+      .card-body { padding: 20px 18px 16px; }
+
+      /* Bigger, more comfortable form controls */
+      .lbl { font-size: 12px; margin-bottom: 5px; }
+      .inp, .sel, .ta { font-size: 16px; padding: 11px 13px; border-radius: 8px; }
+      .field-row { margin-bottom: 14px; }
+      .flex-row { gap: 16px; }
+
+      /* Toggles a little roomier on desktop */
+      .toggle { padding: 11px 15px; }
+      .toggle-label { font-size: 15px; }
+
+      /* Nav + action buttons sized for mouse, not full width */
+      #nav-row { margin-top: 14px; margin-bottom: 28px; }
+      .btn-back, .btn-next { padding: 14px 0; font-size: 17px; }
+      .btn-print { height: 60px; font-size: 18px; max-width: 520px; margin-left: auto; margin-right: auto; }
+      .btn-clear { max-width: 360px; margin-left: auto; margin-right: auto; }
+
+      /* Hover affordances (desktop has a real cursor) */
+      .tab-btn:hover { color: #fff; }
+      .toggle:hover { border-color: #8b0000; }
+      .btn-print:hover, .btn-next:hover { filter: brightness(1.08); }
+      .btn-back:hover { background: #fbeeee; }
+    }
 
     /* ════════════════════════════════
        PRINT FORM — hidden on screen
@@ -327,47 +376,53 @@ async function loadPersonnel() {
   }
 };
 
-const AMB_SERVICES = ["AMR","THROOP","FLEMING","Cayuga","Other"];
+const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","Other"];
 
-const DISPATCH_TYPES = [
-  {code:"311",label:"Medical assist"},
-  {code:"321",label:"EMS call"},
-  {code:"322",label:"MVA"},
-  {code:"324",label:"MVA no injuries"},
-  {code:"350",label:"RIT call"},
-  {code:"411",label:"Liquid spill"},
-  {code:"813",label:"Wind/Storm"},
-  {code:"611",label:"Canceled en route"},
-  {code:"444",label:"Power line down"},
-  {code:"561",label:"Unauthorized burning"},
-  {code:"700",label:"False alarm"},
+// ── Dispatch narrative dropdown options ──────────────────
+// ── NERIS incident taxonomy (7 core categories → subtypes) ──
+// Replaced the retired NFIRS codes (NFIRS sunset Feb 2026; NERIS is now the
+// mandated system in NY per General Municipal Law 204-d). Plain-language,
+// no numeric codes — matches how NERIS itself is structured.
+const NERIS_CATEGORIES = [
+  { code:"FIRE", label:"Fire", subtypes:[
+    "Structure Fire — structural involvement","Structure Fire — confined","Cooking Fire (confined)","Chimney Fire",
+    "Vehicle Fire — passenger","Vehicle Fire — electric (EV)","Vehicle Fire — heavy/commercial",
+    "Wildland/Brush/Grass Fire","Outside/Rubbish/Dumpster Fire","Mobile Home/Manufactured Fire","Other Fire"] },
+  { code:"MEDICAL", label:"Medical", subtypes:[
+    "Cardiac Arrest","Stroke/CVA","Respiratory Distress","Chest Pain/Cardiac","Diabetic/Other Illness",
+    "Traumatic Injury (fall, assault)","MVC with Injury","Overdose/Poisoning","Other Medical"] },
+  { code:"HAZSIT", label:"Hazardous Situation", subtypes:[
+    "Gas Leak (natural/LP)","Fuel/Oil Spill","Hazmat Release","Carbon Monoxide (confirmed)",
+    "Electrical Hazard/Wires Down","MVC — no injuries","Smoke Investigation (no fire)","Gas Odor (unconfirmed)","Other Hazard"] },
+  { code:"RESCUE", label:"Rescue", subtypes:[
+    "MVC with Entrapment/Extrication","Water/Ice Rescue","Confined Space Rescue","High Angle/Rope Rescue",
+    "Structural Collapse","Industrial/Machinery Entrapment","Other Rescue"] },
+  { code:"PUBLIC_SERVICE", label:"Public Service", subtypes:[
+    "Lift Assist (no transport)","Smoke Alarm Activation (no fire)","CO Alarm (no CO found)","Fire Alarm Activation",
+    "Welfare Check/Person in Distress","Lost/Missing Person","Weather/Storm Damage","Water Problem/Flooding",
+    "Public Assist/Service Call","Other Public Service"] },
+  { code:"NO_EMERGENCY", label:"No Emergency", subtypes:[
+    "Cancelled En Route","False Alarm — accidental","False Alarm — malicious","Good Intent","Wrong Location","Other"] },
+  { code:"LAW", label:"Law Enforcement Assist", subtypes:[
+    "Law Enforcement Assist"] },
 ];
-const DISPATCH_SPECIAL = [
-  {code:"STR",label:"Structure fire:"},
-  {code:"VEH",label:"Vehicle fire:"},
-  {code:"OUT",label:"Outdoor fire:"},
-  {code:"ELE",label:"Electrical problem:"},
-  {code:"OTH",label:"Other:"},
-];
-
-const LOCATIONS = [
-  {code:"121",label:"Gym"},       {code:"131",label:"Church"},
-  {code:"161",label:"Restaurant"},{code:"162",label:"Bar"},
-  {code:"816",label:"Farm"},      {code:"891",label:"Warehouse"},
-  {code:"962",label:"Residential street"},{code:"965",label:"Vehicle parking area"},
-  {code:"519",label:"Grocery Store"},{code:"559",label:"HD, Dicks, Petco"},
-  {code:"581",label:"Mall, Kohls"},{code:"700",label:"Manufacturing"},
-  {code:"210",label:"School"},    {code:"321",label:"ARC/IRA"},
-  {code:"419",label:"1-2 Family Dwelling"},{code:"512",label:"Convenience Store"},
-];
+// NERIS location/use types (replaces old property-occupancy list)
+const LOCATION_USE_TYPES = ["Residential — single family","Residential — multi family","Commercial/Business","Industrial/Manufacturing","Assembly/Institutional","Educational/School","Healthcare","Storage/Warehouse","Agricultural/Farm","Vehicle","Roadway/Highway","Outdoor/Open Land","Vacant/Abandoned","Other","N/A"];
+const RESPONSE_MODES = ["Emergency (lights & siren)","Non-Emergency (cold)","Cancelled En Route","Standby/Cover Assignment"];
+const ARRIVAL_CONDITIONS = ["Nothing Showing","Smoke Showing","Fire Showing","Working Fire","Fully Involved","Already Extinguished","Patient(s) on Scene","Hazard Present","Cancelled En Route","Nothing Found","Other"];
+const ACTIONS_TAKEN = ["Fire Attack/Suppression","Search & Rescue","Ventilation","Forcible Entry","Overhaul","Extrication","Patient Care/EMS","Traffic Control","Salvage","Investigation","Established Water Supply","Stood By","Assisted Other Agency","Scene Lighting","Hazmat Control","No Action Required"];
+const WATER_SUPPLY = ["N/A","Hydrant","Tanker Shuttle","Draft/Static Source","Booster Tank Only","Mutual Aid Tankers"];
+const DISPOSITIONS = ["Fire Extinguished","Fire Controlled","Out on Arrival","Patient Transported","Patient Refused","Turned Over to Owner","Turned Over to PD","Turned Over to Other Agency","Investigation Pending","False Alarm","No Incident Found","Cancelled"];
+const CAUSES = ["Undetermined","Under Investigation","Accidental","Electrical","Cooking","Heating Equipment","Smoking","Open Flame","Vehicle/Mechanical","Intentional","Natural (lightning/weather)","N/A"];
 
 const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
 const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVA","EMS","Law","Remarks","Finalize"];
 
 const EMPTY = {
-  date:"", runNum:"", ic:"", enteredBy:"", badge:"", entryDate:"",
+  date:"", runNum:"", ic:"",
   disp:"", enroute:"", arrived:"", clear:"", inQ:"",
-  dispType:"", dispDetail:"", dispActual:"", locCode:"", address:"",
+  dispActual:"", address:"",
+  nerisCat:"", nerisType:"", locationUse:"", responseMode:"", arrivalCond:"", actionsTaken:[], waterSupply:"", disposition:"", cause:"", narrative:"",
   apparatus:{}, apparatusDriver:{}, personnel:{},
   emtCt:"", intCt:"", totalCt:"",
   injName:"", injNum:"", rptFiled:"",
@@ -375,7 +430,7 @@ const EMPTY = {
   refusedPcr:["","",""],
   law:["","",""],
   cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
-  mutual:[], mutualDir:"", remarks:"", reportBy:"", pg:"1", pgOf:"1", signature:"",
+  mutual:[], mutualDir:"", remarks:"", reportBy:"",
 };
 
 // ══════════════════════════════
@@ -424,6 +479,28 @@ function loadForm() {
   if (typeof data.personnel !== 'object' || Array.isArray(data.personnel)) data.personnel = {};
   if (typeof data.apparatusDriver !== 'object' || Array.isArray(data.apparatusDriver)) data.apparatusDriver = {};
 
+  // narrative fields: ensure present (added in later version)
+  if (typeof data.nerisCat !== 'string') data.nerisCat = '';
+  if (typeof data.nerisType !== 'string') data.nerisType = '';
+  if (typeof data.locationUse !== 'string') data.locationUse = '';
+  // migrate old NFIRS fields if present
+  if (data.nfirsType && !data.nerisType) data.nerisType = data.nfirsType;
+  if (data.propertyType && !data.locationUse) data.locationUse = data.propertyType;
+  delete data.nfirsType; delete data.propertyType;
+  delete data.dispType; delete data.dispDetail;
+  delete data.locCode;
+  if (typeof data.responseMode !== 'string') data.responseMode = '';
+  if (typeof data.arrivalCond !== 'string') data.arrivalCond = '';
+  if (!Array.isArray(data.actionsTaken)) data.actionsTaken = [];
+  if (typeof data.waterSupply !== 'string') data.waterSupply = '';
+  if (typeof data.disposition !== 'string') data.disposition = '';
+  if (typeof data.cause !== 'string') data.cause = '';
+  if (typeof data.narrative !== 'string') data.narrative = '';
+
+  // Strip retired fields from older saved reports (no longer used)
+  delete data.enteredBy; delete data.badge; delete data.entryDate;
+  delete data.pg; delete data.pgOf; delete data.signature;
+
   // ensure a stable id for history tracking
   if (!data._id) data._id = 'r' + Date.now();
 
@@ -432,6 +509,16 @@ function loadForm() {
 
 function saveForm() {
   try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
+}
+
+// When a roster member is chosen in any dropdown (IC, driver, report-by,
+// injured), automatically check them on the Personnel tab so the on-scene
+// count stays accurate. Only marks valid roster badges; ignores blanks.
+function markOnScene(badge) {
+  if (!badge) return;
+  if (!PERSONNEL.some(p => p.badge === badge)) return;
+  if (!F.personnel) F.personnel = {};
+  F.personnel[badge] = true;
 }
 
 // Build a fresh empty report object
@@ -851,30 +938,17 @@ function tabIncident() {
   const infoCard = card('Incident Info',
     field('Date',                dateInp(F.date,       v=>{F.date=v;      saveForm();updateHeader();}), 10),
     field('Incident Number',     textInp(F.runNum,     v=>{F.runNum=v;    saveForm();updateHeader();}, 'e.g. 25-0142'), 10),
-    field('Incident Commander',  persDropdown(F.ic,    v=>{F.ic=v;        saveForm();}), 0)
+    field('Incident Commander',  persDropdown(F.ic,    v=>{F.ic=v; markOnScene(v); saveForm();}), 0)
   );
   wrap.appendChild(infoCard);
 
-  // ── Location / Address card ─────────────────────────────
-  const locOpts = [["","— Select Location Type —"], ...LOCATIONS.map(l=>[l.code, l.code+" – "+l.label])];
-  const locSel = sel(F.locCode, locOpts, v=>{
-    F.locCode = v;
-    saveForm();
-    addrWrap.style.display = v ? 'block' : 'none';
-  });
-  Object.assign(locSel.style, UNI);
-
+  // ── Address card ─────────────────────────────────────────
   const addrInp = textInp(F.address, v=>{F.address=v;saveForm();}, 'Street address…');
-  const addrWrap = document.createElement('div');
-  addrWrap.style.display = F.locCode ? 'block' : 'none';
-  addrWrap.style.marginTop = '10px';
-  addrWrap.appendChild(lbl('Street Address'));
-  addrWrap.appendChild(addrInp);
+  Object.assign(addrInp.style, UNI);
 
   const locBody = document.createElement('div');
-  locBody.appendChild(lbl('Location Type'));
-  locBody.appendChild(locSel);
-  locBody.appendChild(addrWrap);
+  locBody.appendChild(lbl('Street Address'));
+  locBody.appendChild(addrInp);
 
   const locCard = document.createElement('div');
   locCard.className = 'card';
@@ -1097,7 +1171,16 @@ function makeTimeField(labelText, storeKey, prevKey) {
 
   row.appendChild(labelCol);
   row.appendChild(el);
-  if (prevKey) row.appendChild(diffBadge);
+  if (prevKey) {
+    row.appendChild(diffBadge);
+  } else {
+    // No diff badge for the first field — add an invisible spacer the same
+    // size so the input width matches the other rows.
+    const spacer = document.createElement('div');
+    Object.assign(spacer.style, { minWidth:'54px', padding:'4px 6px', flexShrink:'0', visibility:'hidden' });
+    spacer.textContent = '—';
+    row.appendChild(spacer);
+  }
   return row;
 }
 
@@ -1182,52 +1265,176 @@ function tabTimes() {
 function tabDispatch() {
   const wrap = document.createElement('div');
 
-  // ── Dispatch type toggles ────────────────────────────────
-  const allTypes = [...DISPATCH_TYPES, ...DISPATCH_SPECIAL];
-  const togglesWrap = document.createElement('div');
-  for (const d of allTypes) {
-    const isSelected = F.dispType === d.code;
-    const tog = toggle(d.label, d.code, isSelected, on => {
-      F.dispType = on ? d.code : '';
-      if (!on) { F.dispActual = ''; F.dispDetail = ''; }
-      saveForm();
-      renderTab();
+  // ── Actual Dispatch Text (standalone) ────────────────────
+  const dtBody = document.createElement('div');
+  const ta = document.createElement('textarea');
+  ta.className = 'ta';
+  ta.rows = 3;
+  ta.placeholder = 'Enter the actual dispatch text received from the 911 center…';
+  ta.value = F.dispActual || '';
+  Object.assign(ta.style, { fontSize:'14px', lineHeight:'1.4' });
+  ta.addEventListener('input', e => { F.dispActual = e.target.value; saveForm(); });
+  dtBody.appendChild(ta);
+  wrap.appendChild(card('Actual Dispatch Text', dtBody));
+
+  function optList(arr){ return [["","— Select —"], ...arr.map(x=>[x,x])]; }
+
+  // ── NERIS Incident Type — tap a category, then pick a subtype ──
+  const niBody = document.createElement('div');
+
+  const helpLine = document.createElement('div');
+  helpLine.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
+  helpLine.textContent = 'Classify by what you actually found on scene (NERIS). Tap a category, then choose the type.';
+  niBody.appendChild(helpLine);
+
+  // Category buttons grid
+  const catGrid = document.createElement('div');
+  catGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px';
+  for (const cat of NERIS_CATEGORIES) {
+    const on = F.nerisCat === cat.code;
+    const b = document.createElement('button');
+    b.textContent = cat.label;
+    b.style.cssText = 'padding:11px 8px;border-radius:8px;font-size:13px;font-weight:700;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
+      + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#8b0000');
+    b.addEventListener('click', () => {
+      if (F.nerisCat !== cat.code) { F.nerisCat = cat.code; F.nerisType = ''; }
+      saveForm(); renderTab();
     });
-    togglesWrap.appendChild(tog);
-    if (isSelected) {
-      const textBox = document.createElement('div');
-      Object.assign(textBox.style, {
-        background:'#fff8f0', border:'1.5px solid #8b0000',
-        borderTop:'none', borderRadius:'0 0 8px 8px',
-        padding:'10px 12px', marginBottom:'7px', marginTop:'-7px',
-      });
-      const textLbl = document.createElement('div');
-      textLbl.className = 'lbl';
-      textLbl.textContent = 'Actual Dispatch Text';
-      textLbl.style.marginBottom = '5px';
-      textBox.appendChild(textLbl);
-      const ta = document.createElement('textarea');
-      ta.className = 'ta';
-      ta.rows = 3;
-      ta.placeholder = 'Enter the actual dispatch text received…';
-      ta.value = F.dispActual || '';
-      Object.assign(ta.style, { fontSize:'14px', lineHeight:'1.4' });
-      ta.addEventListener('input', e => { F.dispActual = e.target.value; saveForm(); });
-      textBox.appendChild(ta);
-      if (['STR','VEH','OUT','ELE','OTH'].includes(d.code)) {
-        const detLbl = document.createElement('div');
-        detLbl.className = 'lbl';
-        detLbl.textContent = 'Additional Details';
-        detLbl.style.cssText = 'margin-top:8px;margin-bottom:4px';
-        textBox.appendChild(detLbl);
-        const detInp = inp(F.dispDetail||'', v=>{ F.dispDetail=v; saveForm(); }, { placeholder:'e.g. address, structure type…' });
-        textBox.appendChild(detInp);
-      }
-      togglesWrap.appendChild(textBox);
+    catGrid.appendChild(b);
+  }
+  niBody.appendChild(catGrid);
+
+  // Subtype dropdown for the chosen category
+  if (F.nerisCat) {
+    const catObj = NERIS_CATEGORIES.find(x => x.code === F.nerisCat);
+    if (catObj) {
+      niBody.appendChild(field('Incident Type — ' + catObj.label,
+        sel(F.nerisType||'', optList(catObj.subtypes), v=>{F.nerisType=v;saveForm();})));
     }
   }
-  wrap.appendChild(card('Dispatched As', togglesWrap));
+  wrap.appendChild(card('Incident Type (NERIS)', niBody));
+
+  // ── Incident Details ─────────────────────────────────────
+  const detailBody = document.createElement('div');
+  detailBody.appendChild(field('Location / Use Type', sel(F.locationUse||'', optList(LOCATION_USE_TYPES), v=>{F.locationUse=v;saveForm();})));
+  detailBody.appendChild(field('Response Mode', sel(F.responseMode||'', optList(RESPONSE_MODES), v=>{F.responseMode=v;saveForm();})));
+  detailBody.appendChild(field('Conditions on Arrival', sel(F.arrivalCond||'', optList(ARRIVAL_CONDITIONS), v=>{F.arrivalCond=v;saveForm();})));
+  wrap.appendChild(card('Incident Details', detailBody));
+
+  // ── Actions & Tactics (multi-select chip grid) ───────────
+  const actBody = document.createElement('div');
+  if (!Array.isArray(F.actionsTaken)) F.actionsTaken = [];
+  const chipGrid = document.createElement('div');
+  chipGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:7px';
+  for (const act of ACTIONS_TAKEN) {
+    const on = F.actionsTaken.includes(act);
+    const chip = document.createElement('button');
+    chip.textContent = (on ? '\u2713 ' : '') + act;
+    chip.style.cssText = 'padding:8px 12px;border-radius:18px;font-size:12.5px;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
+      + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#5a3000');
+    chip.addEventListener('click', () => {
+      if (F.actionsTaken.includes(act)) F.actionsTaken = F.actionsTaken.filter(a => a !== act);
+      else F.actionsTaken.push(act);
+      saveForm(); renderTab();
+    });
+    chipGrid.appendChild(chip);
+  }
+  actBody.appendChild(chipGrid);
+  wrap.appendChild(card('Actions & Tactics', actBody));
+
+  // ── Outcome ──────────────────────────────────────────────
+  const outBody = document.createElement('div');
+  outBody.appendChild(field('Water Supply', sel(F.waterSupply||'', optList(WATER_SUPPLY), v=>{F.waterSupply=v;saveForm();})));
+  outBody.appendChild(field('Disposition / Outcome', sel(F.disposition||'', optList(DISPOSITIONS), v=>{F.disposition=v;saveForm();})));
+  outBody.appendChild(field('Cause (optional)', sel(F.cause||'', optList(CAUSES), v=>{F.cause=v;saveForm();})));
+  wrap.appendChild(card('Outcome', outBody));
+
   return wrap;
+}
+
+// ── Auto-narrative generator ─────────────────────────────
+function generateNarrative() {
+  function fmtDur2(t1,t2){
+    function pm(t){if(!t)return null;var p=t.split(':');var h=parseInt(p[0]||0),m=parseInt(p[1]||0);return isNaN(h)||isNaN(m)?null:h*60+m;}
+    var a=pm(t1),b=pm(t2); if(a===null||b===null)return null; var d=b-a; if(d<0)d+=1440;
+    var h=Math.floor(d/60),mn=d%60; return h>0?h+"h "+mn+"m":mn+" min";
+  }
+  const icP = PERSONNEL.find(p=>p.badge===F.ic);
+  const icName = icP ? icP.name : (F.ic||'');
+  const apps = APPARATUS.filter(a=>F.apparatus[a]);
+  const selPers = PERSONNEL.filter(p=>F.personnel[p.badge]);
+  const totalPers = parseInt(F.totalCt)||selPers.length;
+  const mutArr = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
+  const ambArr = (F.amb||[]).filter(a=>a.svc).map(a=>a.svc==='Other'?(a.custom||'Other'):a.svc);
+
+  let s = [];
+
+  // Sentence 1 — dispatch
+  let s1 = 'On ' + (F.date||'[date]') + ' at ' + (F.disp||'[time]') + ', Aurelius Fire & Rescue was dispatched';
+  if (F.responseMode) s1 += ' ' + F.responseMode.replace(/ \(.*\)/,'').toLowerCase();
+  s1 += ' to a reported ' + (F.nerisType ? F.nerisType.toLowerCase() : 'incident');
+  if (F.address) s1 += ' at ' + F.address;
+  if (F.locationUse && F.locationUse!=='N/A') s1 += ' (' + F.locationUse.toLowerCase() + ')';
+  s1 += '.';
+  s.push(s1);
+
+  // Sentence 2 — response
+  if (apps.length || totalPers) {
+    let s2 = '';
+    if (apps.length) s2 += apps.join(', ') + ' responded';
+    else s2 += 'Units responded';
+    if (totalPers) s2 += ' with ' + totalPers + ' personnel';
+    if (icName) s2 += ' under the command of ' + icName + (icP?(' #'+icP.badge):'');
+    s2 += '.';
+    s.push(s2);
+  }
+
+  // Sentence 3 — arrival
+  if (F.arrivalCond) s.push('Upon arrival, crews found ' + F.arrivalCond.toLowerCase() + '.');
+
+  // Sentence 4 — actions
+  if (Array.isArray(F.actionsTaken) && F.actionsTaken.length) {
+    s.push('Personnel performed ' + joinList(F.actionsTaken.map(a=>a.toLowerCase())) + '.');
+  }
+
+  // Sentence 5 — water supply
+  if (F.waterSupply && F.waterSupply!=='N/A') s.push('Water supply was established via ' + F.waterSupply.toLowerCase() + '.');
+
+  // Sentence 6 — mutual aid
+  if (mutArr.length) {
+    const dir = (F.mutualDir||'').toLowerCase();
+    s.push('Mutual aid was ' + (dir?dir:'coordinated') + ' with ' + joinList(mutArr) + '.');
+  }
+
+  // Sentence 7 — EMS
+  if (ambArr.length) s.push('Patient care was provided and transport was handled by ' + joinList(ambArr) + '.');
+
+  // Sentence 8 — outcome + cause + clear
+  let s8 = '';
+  if (F.disposition) s8 += 'The incident was ' + F.disposition.toLowerCase() + '.';
+  if (F.cause && !['Undetermined','N/A','Under Investigation'].includes(F.cause)) {
+    s8 += (s8?' ':'') + 'The cause was determined to be ' + F.cause.toLowerCase() + '.';
+  } else if (F.cause==='Under Investigation') {
+    s8 += (s8?' ':'') + 'The cause remains under investigation.';
+  }
+  if (s8) s.push(s8);
+
+  if (F.inQ) {
+    let s9 = 'Units returned to quarters at ' + F.inQ;
+    const tot = fmtDur2(F.disp, F.inQ);
+    if (tot) s9 += ', clearing the scene after ' + tot;
+    s9 += '.';
+    s.push(s9);
+  }
+
+  return s.join(' ');
+}
+
+function joinList(arr){
+  if (!arr.length) return '';
+  if (arr.length===1) return arr[0];
+  if (arr.length===2) return arr[0]+' and '+arr[1];
+  return arr.slice(0,-1).join(', ')+', and '+arr[arr.length-1];
 }
 
 function tabApparatus() {
@@ -1256,6 +1463,7 @@ function tabApparatus() {
       const driverSel = sel(F.apparatusDriver[a]||'', persOpts, v => {
         if (!F.apparatusDriver) F.apparatusDriver = {};
         F.apparatusDriver[a] = v;
+        markOnScene(v);
         saveForm();
         // update sub label without full re-render
         const sub = tog.querySelector('.toggle-sub');
@@ -1768,7 +1976,7 @@ function tabRemarks() {
   injBody.appendChild(injNameLbl);
 
   const injOpts = [["","— Select (if applicable) —"], ...PERSONNEL.map(p=>[p.badge, p.name])];
-  const injSel = sel(F.injName, injOpts, v => { F.injName = v; saveForm(); });
+  const injSel = sel(F.injName, injOpts, v => { F.injName = v; markOnScene(v); saveForm(); });
   injSel.style.marginBottom = '12px';
   injBody.appendChild(injSel);
 
@@ -1806,137 +2014,64 @@ function tabRemarks() {
   injCard.appendChild(injBody);
   wrap.appendChild(injCard);
 
-  // ── Report Signature — touch/mouse canvas pad ────────────
-  const sigCard = document.createElement('div');
-  sigCard.className = 'card';
-  const sigTitle = document.createElement('div');
-  sigTitle.className = 'card-title';
-  sigTitle.textContent = 'Report Signature';
-  const sigBody = document.createElement('div');
-  sigBody.className = 'card-body';
-
-  const sigLbl = document.createElement('div');
-  sigLbl.className = 'lbl';
-  sigLbl.style.marginBottom = '4px';
-  sigLbl.textContent = 'Report By';
-  sigBody.appendChild(sigLbl);
-
-  // Roster dropdown to select who is signing
-  const sigPersOpts = [["","— Select from Roster —"], ...PERSONNEL.map(p=>[p.badge, p.name + ' (Badge ' + p.badge + ')'])];
-  const sigPersSel = sel(F.reportBy||'', sigPersOpts, v => {
-    F.reportBy = v; saveForm();
-    // show selected name above canvas
-    const found = PERSONNEL.find(p=>p.badge===v);
-    sigNameDisplay.textContent = found ? found.name + ' — Badge ' + found.badge : '';
-  });
-  sigPersSel.style.marginBottom = '10px';
-  sigBody.appendChild(sigPersSel);
-
-  const sigNameDisplay = document.createElement('div');
-  sigNameDisplay.style.cssText = 'font-size:13px;font-weight:600;color:#8b0000;margin-bottom:6px;min-height:18px';
-  const sigFound = PERSONNEL.find(p=>p.badge===F.reportBy);
-  sigNameDisplay.textContent = sigFound ? sigFound.name + ' — Badge ' + sigFound.badge : '';
-  sigBody.appendChild(sigNameDisplay);
-
-  const sigDrawLbl = document.createElement('div');
-  sigDrawLbl.className = 'lbl';
-  sigDrawLbl.style.marginBottom = '6px';
-  sigDrawLbl.textContent = 'Sign below with your finger or stylus';
-  sigBody.appendChild(sigDrawLbl);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 580;
-  canvas.height = 140;
-  Object.assign(canvas.style, {
-    width:'100%', height:'140px', border:'1.5px solid #c8a97a',
-    borderRadius:'8px', background:'#fff8f0', display:'block',
-    touchAction:'none', cursor:'crosshair'
-  });
-
-  // Restore saved signature if any
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    // Canvas not supported in this environment — show text fallback
-    const fallback = document.createElement('div');
-    fallback.style.cssText = 'padding:12px;background:#f5ede0;border:1.5px solid #c8a97a;border-radius:8px;font-size:13px;color:#888';
-    fallback.textContent = 'Signature pad not available in this environment. Sign on the printed form.';
-    sigBody.appendChild(fallback);
-    sigCard.appendChild(sigTitle);
-    sigCard.appendChild(sigBody);
-    wrap.appendChild(sigCard);
-    return wrap;
-  }
-
-  if (F.signature) {
-    const img = new Image();
-    img.onload = () => { const c = canvas.getContext('2d'); if(c) c.drawImage(img,0,0); };
-    img.src = F.signature;
-  }
-
-  ctx.strokeStyle = '#1a1a1a';
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  let drawing = false;
-  let lastX = 0, lastY = 0;
-
-  function getPos(e) {
-    const r = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / r.width;
-    const scaleY = canvas.height / r.height;
-    const src = e.touches ? e.touches[0] : e;
-    return [(src.clientX - r.left) * scaleX, (src.clientY - r.top) * scaleY];
-  }
-
-  canvas.addEventListener('mousedown',  e => { drawing=true; [lastX,lastY]=getPos(e); });
-  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; [lastX,lastY]=getPos(e); }, {passive:false});
-
-  function draw(e) {
-    if (!drawing) return;
-    e.preventDefault && e.preventDefault();
-    const [x,y] = getPos(e);
-    ctx.beginPath();
-    ctx.moveTo(lastX,lastY);
-    ctx.lineTo(x,y);
-    ctx.stroke();
-    [lastX,lastY] = [x,y];
-  }
-  canvas.addEventListener('mousemove',  draw);
-  canvas.addEventListener('touchmove',  draw, {passive:false});
-
-  function stopDraw() {
-    if (!drawing) return;
-    drawing = false;
-    F.signature = canvas.toDataURL();
-    saveForm();
-  }
-  canvas.addEventListener('mouseup',   stopDraw);
-  canvas.addEventListener('mouseleave',stopDraw);
-  canvas.addEventListener('touchend',  stopDraw);
-
-  sigBody.appendChild(canvas);
-
-  // Clear button
-  const clearSig = document.createElement('button');
-  clearSig.textContent = '✕ Clear Signature';
-  clearSig.style.cssText = 'margin-top:8px;background:none;border:1.5px solid #c8a97a;border-radius:6px;padding:6px 14px;font-size:13px;color:#8b0000;cursor:pointer;font-family:Georgia,serif';
-  clearSig.addEventListener('click', () => {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    F.signature = '';
-    saveForm();
-  });
-  sigBody.appendChild(clearSig);
-
-  sigCard.appendChild(sigTitle);
-  sigCard.appendChild(sigBody);
-  wrap.appendChild(sigCard);
-
   return wrap;
 }
 
 function tabPreview() {
   const wrap = document.createElement('div');
+
+  // ── Report By card (roster dropdown) ─────────────────────
+  const rbCard = document.createElement('div');
+  rbCard.className = 'card';
+  const rbTitle = document.createElement('div');
+  rbTitle.className = 'card-title';
+  rbTitle.textContent = 'Report By';
+  const rbBody = document.createElement('div');
+  rbBody.className = 'card-body';
+  const rbOpts = [["","— Select from Roster —"], ...PERSONNEL.map(p=>[p.badge, p.name + ' (Badge ' + p.badge + ')'])];
+  const rbSel = sel(F.reportBy||'', rbOpts, v => { F.reportBy = v; markOnScene(v); saveForm(); });
+  rbBody.appendChild(rbSel);
+  rbCard.appendChild(rbTitle);
+  rbCard.appendChild(rbBody);
+  wrap.appendChild(rbCard);
+
+  // ── Narrative card ───────────────────────────────────────
+  const nCard = document.createElement('div');
+  nCard.className = 'card';
+  const nTitle = document.createElement('div');
+  nTitle.className = 'card-title';
+  nTitle.textContent = 'Incident Narrative';
+  const nBody = document.createElement('div');
+  nBody.className = 'card-body';
+
+  const nTa = document.createElement('textarea');
+  nTa.className = 'ta';
+  nTa.rows = 7;
+  nTa.placeholder = 'Tap "Generate from Fields" to auto-write a narrative from the data you entered, then edit as needed.';
+  nTa.value = F.narrative || '';
+  Object.assign(nTa.style, { fontSize:'14px', lineHeight:'1.5', marginBottom:'8px' });
+  nTa.addEventListener('input', e => { F.narrative = e.target.value; saveForm(); });
+  nBody.appendChild(nTa);
+
+  const genBtn = document.createElement('button');
+  genBtn.textContent = '✨ Generate from Fields';
+  genBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif;margin-right:8px';
+  genBtn.addEventListener('click', () => {
+    const text = generateNarrative();
+    F.narrative = text; saveForm();
+    nTa.value = text;
+  });
+  nBody.appendChild(genBtn);
+
+  const clrBtn = document.createElement('button');
+  clrBtn.textContent = '✕ Clear';
+  clrBtn.style.cssText = 'background:none;border:1.5px solid #c8a97a;color:#8b0000;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:600;font-family:Georgia,serif';
+  clrBtn.addEventListener('click', () => { F.narrative=''; saveForm(); nTa.value=''; });
+  nBody.appendChild(clrBtn);
+
+  nCard.appendChild(nTitle);
+  nCard.appendChild(nBody);
+  wrap.appendChild(nCard);
 
   const btn = document.createElement('button');
   btn.className = 'btn-print';
@@ -1954,7 +2089,7 @@ function tabPreview() {
 
   const btn2 = document.createElement('button');
   btn2.className = 'btn-print';
-  btn2.textContent = '🖨 Download Blank Form (Print & Fill by Hand)';
+  btn2.textContent = '🖨 Blank Form (Print & Fill by Hand)';
   btn2.style.background = '#555';
   btn2.style.marginTop = '0';
   btn2.addEventListener('click', generateBlankPDF);
@@ -2048,6 +2183,11 @@ function timeDiffStr(t1, t2) {
 // ── Shared print styles ──────────────────────────────────
 const PRINT_STYLES = ``;  // keep var for blank form compat, real styles inline now
 
+function nerisCatLabel(code){
+  var f=NERIS_CATEGORIES.find(function(x){return x.code===code;});
+  return f?f.label:"";
+}
+
 function buildPrintHTML() {
   function parseMin(t){if(!t)return null;var p=t.split(':'),h=parseInt(p[0]||0),m=parseInt(p[1]||0);return isNaN(h)||isNaN(m)?null:h*60+m;}
   function fmtDur(m){if(m===null||m<0)return"—";var h=Math.floor(m/60),mn=m%60;return h>0?h+"h "+mn+"m":mn+" min";}
@@ -2057,8 +2197,6 @@ function buildPrintHTML() {
   var autoEmt   = selPers.filter(function(p){return p.qual&&p.qual.includes("emt");}).length;
   var autoInt   = selPers.filter(function(p){return p.qual&&p.qual.includes("int");}).length;
   var totalPers = parseInt(F.totalCt)||selPers.length;
-  var dispEntry = [].concat(DISPATCH_TYPES,DISPATCH_SPECIAL).find(function(d){return d.code===F.dispType;});
-  var locEntry  = LOCATIONS.find(function(l){return l.code===F.locCode;});
   var icPerson  = PERSONNEL.find(function(p){return p.badge===F.ic;});
   var icName    = icPerson?icPerson.name+" #"+icPerson.badge:(F.ic||"—");
   var sigPerson = PERSONNEL.find(function(p){return p.badge===F.reportBy;});
@@ -2069,7 +2207,6 @@ function buildPrintHTML() {
   var usedRef   = (F.refusedPcr||[]).filter(function(p){return p.trim();});
   var mutList   = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
   var activeApp = APPARATUS.filter(function(a){return F.apparatus[a];});
-  var dispText  = dispEntry?dispEntry.label+(F.dispDetail?" — "+F.dispDetail:""):"—";
   var tDisp=parseMin(F.disp),tInQ=parseMin(F.inQ),callMins=null;
   if(tDisp!==null&&tInQ!==null){callMins=tInQ-tDisp;if(callMins<0)callMins+=1440;}
   var persHours=callMins!==null&&totalPers>0?((callMins*totalPers)/60).toFixed(1):null;
@@ -2138,8 +2275,11 @@ function buildPrintHTML() {
   // INCIDENT INFO
   H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
   H+=shdr('Incident Information');
-  H+='<tr>'+lcell("26%","Incident Commander",icName)+lcell("20%","Dispatch Type",dispText)
-    +lcell("16%","Location",locEntry?locEntry.label:"—")+lcell("38%","Address",F.address||"—")+'</tr>';
+  var nerisLbl = F.nerisType ? (nerisCatLabel(F.nerisCat)+": "+F.nerisType) : "—";
+  H+='<tr>'+lcell("28%","Incident Commander",icName)+lcell("28%","Incident Type (NERIS)",nerisLbl)
+    +lcell("44%","Address",F.address||"—")+'</tr>';
+  H+='<tr>'+lcell("33%","Response Mode",F.responseMode||"—")
+    +lcell("29%","Location / Use",F.locationUse||"—")+lcell("38%","Conditions on Arrival",F.arrivalCond||"—")+'</tr>';
   if(F.dispActual) H+='<tr><td colspan="4" style="padding:2px 7px;border:1px solid #ddd;font-size:7pt;color:#444"><b>Dispatch:</b> '+F.dispActual+'</td></tr>';
   H+='</tbody></table>';
 
@@ -2243,6 +2383,14 @@ function buildPrintHTML() {
       +'<b>Mutual Aid'+(F.mutualDir?" ("+F.mutualDir+")":"")+":</b> "+mutList.join(" · ")+'</div>';
   }
 
+  // NARRATIVE (if present)
+  if(F.narrative){
+    H+='<table style="width:100%;border:1px solid #ccc;margin-bottom:4px"><tbody>'
+      +shdr('Narrative')
+      +'<tr><td style="padding:5px 7px;font-size:7.5pt;line-height:1.45;white-space:pre-wrap;vertical-align:top">'+F.narrative+'</td></tr>'
+      +'</tbody></table>';
+  }
+
   // REMARKS — fixed height so it doesn't overflow
   H+='<table style="width:100%;border:1px solid #ccc;margin-bottom:4px"><tbody>'
     +shdr('Remarks')
@@ -2261,8 +2409,7 @@ function buildPrintHTML() {
   H+='<table style="background:#222;margin-top:4px"><tr>'
     +'<td style="padding:5px 12px;color:#aaa;font-size:6.5pt">Aurelius Fire &amp; Rescue &nbsp;|&nbsp; Incident #'+(F.runNum||"")+' &nbsp;|&nbsp; IC: '+icName+'</td>'
     +'<td style="padding:5px 12px;color:#fff;font-size:7pt;text-align:right;vertical-align:middle">'
-    +(sigName?sigName+"&nbsp;&nbsp;":"__________________________")
-    +(F.signature?'<img src="'+F.signature+'" style="height:18px;vertical-align:middle;margin-left:6px;background:#fff;padding:1px 3px">':"")
+    +'Report by: '+(sigName||"__________________________")
     +'</td></tr></table>';
 
   // ══ PAGE 2 — PERSONNEL ON SCENE ════════════════════════
@@ -2511,80 +2658,6 @@ async function generateAndShare() {
     }
   }
 }
-
-  // Apparatus rows (5 per row) with driver name
-  let appRows = '';
-  for (let r=0; r<2; r++) {
-    const slice = APPARATUS.slice(r*5, r*5+5);
-    appRows += '<tr>' + slice.map(a => {
-      const active = !!F.apparatus[a];
-      const driverBadge = (F.apparatusDriver||{})[a];
-      const driverName = driverBadge ? (PERSONNEL.find(p=>p.badge===driverBadge)||{name:''}).name : '';
-      return `<td style="width:20%;font-weight:${active?'bold':'normal'};background:${active?'#eee':'#fff'}">
-        <div style="font-size:7.5pt;text-transform:uppercase">${a}</div>
-        <div style="border-bottom:1px solid #000;min-height:12pt;font-size:7pt">${driverName}</div>
-      </td>`;
-    }).join('') + '</tr>';
-  }
-
-  // Dispatch checkboxes (2 cols)
-  let dispHtml = '';
-  for (let i=0; i<DISPATCH_TYPES.length; i+=2) {
-    const d1 = DISPATCH_TYPES[i], d2 = DISPATCH_TYPES[i+1];
-    dispHtml += `<div class="disp-item">${chkHtml(F.dispType===d1.code)} ${d1.label}</div>`;
-    if (d2) dispHtml += `<div class="disp-item">${chkHtml(F.dispType===d2.code)} ${d2.label}</div>`;
-  }
-  for (const d of DISPATCH_SPECIAL) {
-    const detail = (F.dispType===d.code && F.dispDetail) ? ` ${F.dispDetail}` : '___________';
-    dispHtml += `<div class="disp-item full">${chkHtml(F.dispType===d.code)} ${d.label}${detail}</div>`;
-  }
-
-  // Location checkboxes (4 cols)
-  let locHtml = LOCATIONS.map(l =>
-    `<div class="loc-item">${chkHtml(F.locCode===l.code)} ${l.code} ${l.label}</div>`
-  ).join('');
-
-  // Personnel (2 cols)
-  let persHtml = PERSONNEL.map(p =>
-    `<div class="pers-item">${chkHtml(!!F.personnel[p.badge])}
-      <span style="font-weight:${F.personnel[p.badge]?'bold':'normal'}">${p.name}</span>
-      <span style="color:#555;font-size:7.5pt">&nbsp;${p.badge}${p.qual?' '+p.qual:''}</span>
-    </div>`
-  ).join('');
-
-  // Vehicle rows — only show filled ones, up to 6
-  const filledCars = (F.cars||[]).filter(c => c.model || c.plate || c.color);
-  let mvaRows = filledCars.length ? filledCars.map((c,i) =>
-    `<tr>
-      <td style="width:10%;font-size:7.5pt"><b>VEH #${i+1}</b></td>
-      <td style="font-size:7.5pt"><b>MODEL:</b> ${c.model||'&nbsp;'.repeat(28)}</td>
-      <td style="font-size:7.5pt"><b>PLATE#:</b> ${c.plate||'&nbsp;'.repeat(12)}</td>
-      <td style="font-size:7.5pt"><b>COLOR:</b> ${c.color||'&nbsp;'.repeat(10)}</td>
-    </tr>`
-  ).join('') : `<tr><td colspan="4" style="font-size:7.5pt;color:#aaa">No vehicles entered</td></tr>`;
-
-  // Ambulances — each with their own PCR #
-  const usedAmbs = F.amb.filter(a => a.svc);
-  let ambCells = F.amb.map((a,i) =>
-    `<td><b>${i+1}:</b> ${ambName(a)||'&nbsp;'.repeat(18)} &nbsp; <b>PCR#:</b> ${a.pcr||'___________'}</td>`
-  ).join('');
-
-  // Refused Transport PCR
-  const usedRefused = (F.refusedPcr||[]).filter(p=>p.trim());
-  const refusedLine = usedRefused.length
-    ? usedRefused.map((p,i)=>`<b>Refused PCR #${i+1}:</b> ${p}`).join(' &nbsp;|&nbsp; ')
-    : '';
-
-  // Law — stored as "Agency||Detail", print as "Agency — Detail"
-  let lawCells = F.law.map((l,i) => {
-    if (!l) return `<td><b>${i+1}:</b> ${'&nbsp;'.repeat(30)}</td>`;
-    const parts = l.split('||');
-    const display = parts[0] + (parts[1] ? ' — ' + parts[1] : '');
-    return `<td><b>${i+1}:</b> ${display}</td>`;
-  }).join('');
-
-
-
 // ══════════════════════════════
 // RENDER
 // ══════════════════════════════
