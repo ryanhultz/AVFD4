@@ -1502,6 +1502,12 @@ function generateNarrative() {
     var a=pm(t1),b=pm(t2); if(a===null||b===null)return null; var d=b-a; if(d<0)d+=1440;
     var h=Math.floor(d/60),mn=d%60; return h>0?h+"h "+mn+"m":mn+" min";
   }
+
+  // Deterministic pick: same report → same wording (seeded by incident #).
+  var seedStr = (F.runNum||'') + (F.date||'');
+  var seed = 0; for (var si=0; si<seedStr.length; si++) seed = (seed*31 + seedStr.charCodeAt(si)) & 0xffffffff;
+  function pick(arr){ if(!arr.length) return ''; var idx = Math.abs(seed + arr.length*7) % arr.length; seed = (seed*1103515245 + 12345) & 0x7fffffff; return arr[idx]; }
+
   const icP = PERSONNEL.find(p=>p.badge===F.ic);
   const icName = icP ? icP.name : (F.ic||'');
   const apps = APPARATUS.filter(a=>F.apparatus[a]);
@@ -1509,119 +1515,176 @@ function generateNarrative() {
   const totalPers = parseInt(F.totalCt)||selPers.length;
   const mutArr = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
   const ambArr = (F.amb||[]).filter(a=>a.svc).map(a=>a.svc==='Other'?(a.custom||'Other'):a.svc);
+  var nerisTypeEff = effVal(F.nerisType, F.nerisTypeOther);
+  var locationUseEff = effVal(F.locationUse, F.locationUseOther);
+  var arrivalEff = effVal(F.arrivalCond, F.arrivalCondOther);
+  var cat = F.nerisCat || '';
 
   let s = [];
 
-  // Sentence 1 — dispatch
-  let s1 = 'On ' + (F.date||'[date]') + ' at ' + (F.disp||'[time]') + ', Aurelius Fire & Rescue was dispatched';
-  if (F.responseMode) s1 += ' ' + F.responseMode.replace(/ \(.*\)/,'').toLowerCase();
-  var nerisTypeEff = effVal(F.nerisType, F.nerisTypeOther);
-  var locationUseEff = effVal(F.locationUse, F.locationUseOther);
-  s1 += ' to a reported ' + (nerisTypeEff ? nerisTypeEff.toLowerCase() : 'incident');
+  // ── Sentence 1 — dispatch ──
+  var dispVerb = pick(['was dispatched','was toned out','responded','was alerted']);
+  var s1 = 'On ' + (F.date||'[date]') + ' at ' + (F.disp||'[time]') + ' hours, Aurelius Fire & Rescue ' + dispVerb;
+  if (F.responseMode) {
+    var rm = F.responseMode.replace(/ \(.*\)/,'').toLowerCase();
+    if (rm.indexOf('emergency')>=0 && rm.indexOf('non')<0) s1 += ' emergency';
+    else if (rm.indexOf('non')>=0) s1 += ' non-emergency';
+  }
+  s1 += ' ' + pick(['to a reported','for a reported','to a']) + ' ' + (nerisTypeEff ? nerisTypeEff.toLowerCase() : 'incident');
   if (F.address) s1 += ' at ' + F.address;
-  if (locationUseEff && locationUseEff!=='N/A') s1 += ' (' + locationUseEff.toLowerCase() + ')';
+  if (locationUseEff && locationUseEff!=='N/A') {
+    var luw = locationUseEff.toLowerCase();
+    if (luw === 'residential — single family') luw = 'single-family residence';
+    else if (luw === 'residential — multi family') luw = 'multi-family residence';
+    else luw = luw.replace(/\s*—\s*/g, ', ');
+    s1 += ', a ' + luw;
+  }
   s1 += '.';
   s.push(s1);
 
-  // Sentence 2 — response
+  // ── Sentence 2 — response ──
   if (apps.length || totalPers) {
-    let s2 = '';
-    if (apps.length) s2 += apps.join(', ') + ' responded';
-    else s2 += 'Units responded';
+    var s2 = '';
+    var respVerb = pick(['responded','turned out','were dispatched']);
+    if (apps.length) {
+      s2 += joinList(apps) + ' ' + respVerb;
+    } else {
+      s2 += 'Units ' + respVerb;
+    }
     if (totalPers) s2 += ' with ' + totalPers + ' personnel';
-    if (icName) s2 += ' under the command of ' + icName + (icP?(' #'+icP.badge):'');
+    if (icName) s2 += ', ' + pick(['under the command of','with command established by','under']) + ' ' + icName + (icP?(' (#'+icP.badge+')'):'');
     s2 += '.';
     s.push(s2);
   }
 
-  // Sentence 3 — arrival (+ patient count when applicable)
-  var arrivalEff = effVal(F.arrivalCond, F.arrivalCondOther);
+  // ── Sentence 3 — arrival (+ patient count) ──
+  var patientPhrase = '';
+  if (F.numPatients && F.numPatients !== '0' && F.numPatients !== '') {
+    patientPhrase = F.numPatients === '6+' ? '6 or more patients'
+      : (F.numPatients === '1' ? 'one patient' : F.numPatients + ' patients');
+  }
   if (arrivalEff) {
-    var s3 = 'Upon arrival, crews found ' + arrivalEff.toLowerCase();
-    if (F.numPatients && F.numPatients !== '0' && F.numPatients !== '') {
-      var pc = F.numPatients === '6+' ? '6 or more patients'
-        : (F.numPatients === '1' ? '1 patient' : F.numPatients + ' patients');
-      s3 += ' with ' + pc;
+    var arrOpen = pick(['On arrival, crews found','Upon arrival, units encountered','First-arriving crews found','Crews arrived to find']);
+    var arrLow = arrivalEff.toLowerCase();
+    var s3 = arrOpen + ' ' + arrLow;
+    if (patientPhrase) {
+      // avoid doubling "on scene" if the arrival condition already says it
+      s3 += /on scene|patient/.test(arrLow) ? ' (' + patientPhrase + ')' : ' with ' + patientPhrase + ' on scene';
     }
     s3 += '.';
     s.push(s3);
-  } else if (F.numPatients && F.numPatients !== '0' && F.numPatients !== '') {
-    var pc2 = F.numPatients === '6+' ? '6 or more patients'
-      : (F.numPatients === '1' ? '1 patient' : F.numPatients + ' patients');
-    s.push('Crews found ' + pc2 + ' on scene.');
+  } else if (patientPhrase) {
+    s.push(pick(['Crews found','Units encountered','On scene, crews found']) + ' ' + patientPhrase + '.');
   }
 
-  // MVC sentence (collision details, whenever any are filled in)
+  // ── MVC details ──
   if (F.mvcVehicles || F.mvcExtrication || (F.mvcHazards && F.mvcHazards.length)) {
-    var sm = 'The collision involved ';
-    sm += (F.mvcVehicles ? (F.mvcVehicles === '6+' ? '6 or more vehicles' : (F.mvcVehicles === '1' ? '1 vehicle' : F.mvcVehicles + ' vehicles')) : 'one or more vehicles');
+    var sm = pick(['The collision involved','The crash involved','Responders found']) + ' ';
+    sm += (F.mvcVehicles ? (F.mvcVehicles === '6+' ? '6 or more vehicles' : (F.mvcVehicles === '1' ? 'a single vehicle' : F.mvcVehicles + ' vehicles')) : 'one or more vehicles');
     if (F.mvcExtrication === 'YES') {
-      sm += ', requiring extrication';
-      if (F.mvcEntrapped) sm += ' of ' + (F.mvcEntrapped === '5+' ? '5 or more occupants' : (F.mvcEntrapped === '1' ? '1 occupant' : F.mvcEntrapped + ' occupants'));
+      sm += ', and crews performed extrication';
+      if (F.mvcEntrapped) sm += ' to free ' + (F.mvcEntrapped === '5+' ? '5 or more occupants' : (F.mvcEntrapped === '1' ? 'one occupant' : F.mvcEntrapped + ' occupants'));
     } else if (F.mvcExtrication === 'NO') {
-      sm += ' with no extrication required';
+      sm += ', with no extrication required';
     }
     sm += '.';
     s.push(sm);
     if (F.mvcHazards && F.mvcHazards.length) {
-      s.push('Hazards on scene included ' + joinList(F.mvcHazards.map(function(h){return h.toLowerCase();})) + '.');
+      s.push(pick(['Scene hazards included','Hazards on scene included','Crews managed hazards including']) + ' ' + joinList(F.mvcHazards.map(function(h){return h.toLowerCase();})) + '.');
     }
   }
 
-  // Sentence 4 — actions (strip the "Category: " prefix for readability)
+  // ── Actions — incident-aware verb + natural action names ──
   if (Array.isArray(F.actionsTaken) && F.actionsTaken.length) {
+    var actMap = {
+      'establish incident command':'established command',
+      'incident assessment (360 completed)':'completed a 360 size-up',
+      'structural fire suppression — interior':'advanced an interior attack',
+      'structural fire suppression — exterior':'conducted an exterior attack',
+      'structural fire suppression — interior and exterior':'attacked the fire interior and exterior',
+      'outside fire suppression':'extinguished the outside fire',
+      'fire control/extinguishment':'controlled and extinguished the fire',
+      'ventilation performed':'ventilated the structure',
+      'forcible entry performed':'forced entry',
+      'primary search':'conducted a primary search',
+      'secondary search':'conducted a secondary search',
+      'overhaul':'performed overhaul',
+      'salvage / property conservation':'performed salvage',
+      'patient assessment':'assessed the patient',
+      'provide basic life support':'provided basic life support',
+      'provide advanced life support':'provided advanced life support',
+      'provide transport':'provided transport',
+      'control traffic':'controlled traffic',
+      'leak stop':'stopped the leak',
+      'spill control':'controlled the spill'
+    };
     var actNames = F.actionsTaken.map(function(a){
       var i = a.indexOf(': ');
-      return (i>=0 ? a.slice(i+2) : a).toLowerCase();
+      var raw = (i>=0 ? a.slice(i+2) : a).toLowerCase();
+      return actMap[raw] || raw;
     });
-    s.push('Personnel performed ' + joinList(actNames) + '.');
+    var actVerb;
+    if (cat==='FIRE') actVerb = pick(['Crews','Companies','Firefighters']);
+    else if (cat==='MEDICAL') actVerb = pick(['Crews','Responders','Personnel']);
+    else actVerb = pick(['Crews','Personnel','Responders']);
+    s.push(actVerb + ' ' + joinList(actNames) + '.');
   }
 
-  // Sentence 5 — water supply
-  if (F.waterSupply && F.waterSupply!=='N/A') s.push('Water supply was established via ' + F.waterSupply.toLowerCase() + '.');
+  // ── Water supply ──
+  if (F.waterSupply && F.waterSupply!=='N/A') {
+    s.push(pick(['Water supply was established via','Water was supplied by','A water supply was secured via']) + ' ' + F.waterSupply.toLowerCase() + '.');
+  }
 
-  // Sentence 6 — mutual aid
+  // ── Mutual aid ──
   if (mutArr.length) {
-    const dir = (F.mutualDir||'').toLowerCase();
-    s.push('Mutual aid was ' + (dir?dir:'coordinated') + ' with ' + joinList(mutArr) + '.');
+    var dir = (F.mutualDir||'').toLowerCase();
+    if (dir==='given') s.push('Mutual aid was provided to ' + joinList(mutArr) + '.');
+    else if (dir==='received') s.push('Mutual aid was received from ' + joinList(mutArr) + '.');
+    else s.push('Mutual aid was coordinated with ' + joinList(mutArr) + '.');
   }
 
-  // Sentence 7 + 8 — EMS / disposition (combined to avoid double-up)
+  // ── EMS / disposition (combined) ──
   var disp = F.disposition || '';
   var isPatientDisp = disp === 'Patient Transported' || disp === 'Patient Refused';
   var dispHandled = false;
 
   if (ambArr.length) {
-    // EMS present — phrase patient care + outcome together
     if (disp === 'Patient Transported') {
-      s.push('Patient care was provided and the patient was transported by ' + joinList(ambArr) + '.');
+      s.push(pick(['Patient care was provided and the patient was transported by','The patient was treated and transported by','Care was rendered and transport provided by']) + ' ' + joinList(ambArr) + '.');
       dispHandled = true;
     } else if (disp === 'Patient Refused') {
-      s.push('Patient care was provided by ' + joinList(ambArr) + '; the patient refused transport.');
+      s.push('Patient care was provided by ' + joinList(ambArr) + ', but the patient refused transport.');
       dispHandled = true;
     } else {
-      s.push('Patient care was provided and transport was handled by ' + joinList(ambArr) + '.');
+      s.push('Patient care and transport were handled by ' + joinList(ambArr) + '.');
     }
   } else if (isPatientDisp) {
-    // Patient disposition but no ambulance listed
     if (disp === 'Patient Transported') { s.push('The patient was transported.'); dispHandled = true; }
     else { s.push('The patient refused transport.'); dispHandled = true; }
   }
 
-  // Outcome (skip if already covered by the patient sentence above) + cause + clear
-  let s8 = '';
-  if (disp && !dispHandled) s8 += 'The incident was resolved as ' + disp.toLowerCase() + '.';
+  // ── Outcome + cause ──
+  var s8 = '';
+  if (disp && !dispHandled) {
+    if (cat==='FIRE' && /extinguish|control|out/i.test(disp)) {
+      s8 += pick(['The fire was placed under control','The fire was brought under control','The fire was knocked down and extinguished']) + '.';
+    } else {
+      s8 += pick(['The incident was resolved as','The call was cleared as','The incident concluded as']) + ' ' + disp.toLowerCase() + '.';
+    }
+  }
   if (F.cause && !['Undetermined','N/A','Under Investigation'].includes(F.cause)) {
-    s8 += (s8?' ':'') + 'The cause was determined to be ' + F.cause.toLowerCase() + '.';
+    s8 += (s8?' ':'') + pick(['The cause was determined to be','The cause was found to be','Cause was attributed to']) + ' ' + F.cause.toLowerCase() + '.';
   } else if (F.cause==='Under Investigation') {
     s8 += (s8?' ':'') + 'The cause remains under investigation.';
   }
   if (s8) s.push(s8);
 
+  // ── Return to quarters ──
   if (F.inQ) {
-    let s9 = 'Units returned to quarters at ' + F.inQ;
-    const tot = fmtDur2(F.disp, F.inQ);
-    if (tot) s9 += ', clearing the scene after ' + tot;
+    var clearVerb = pick(['Units returned to quarters','Companies were placed back in service','Units cleared and returned to quarters']);
+    var s9 = clearVerb + ' at ' + F.inQ + ' hours';
+    var tot = fmtDur2(F.disp, F.inQ);
+    if (tot) s9 += ', ' + pick(['for a total call time of','having operated for','after a total incident time of']) + ' ' + tot;
     s9 += '.';
     s.push(s9);
   }
@@ -2233,17 +2296,94 @@ function tabRemarks() {
   });
   nBody.appendChild(genBtn);
 
+  const aiBtn = document.createElement('button');
+  aiBtn.textContent = '🤖 Polish with AI';
+  aiBtn.style.cssText = 'background:#2d6a2d;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif;margin-right:8px';
+  aiBtn.addEventListener('click', () => polishNarrativeWithAI(nTa, aiBtn, aiStatus));
+  nBody.appendChild(aiBtn);
+
   const clrBtn = document.createElement('button');
   clrBtn.textContent = '✕ Clear';
   clrBtn.style.cssText = 'background:none;border:1.5px solid #c8a97a;color:#8b0000;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:600;font-family:Georgia,serif';
   clrBtn.addEventListener('click', () => { F.narrative=''; saveForm(); nTa.value=''; });
   nBody.appendChild(clrBtn);
 
+  const aiStatus = document.createElement('div');
+  aiStatus.style.cssText = 'font-size:12px;color:#888;margin-top:10px;line-height:1.4';
+  aiStatus.textContent = '"Generate from Fields" works offline. "Polish with AI" rewrites it to read more naturally (needs an internet connection).';
+  nBody.appendChild(aiStatus);
+
   nCard.appendChild(nTitle);
   nCard.appendChild(nBody);
   wrap.appendChild(nCard);
 
   return wrap;
+}
+
+// ── Option B: rewrite the narrative naturally via the Claude API ──
+async function polishNarrativeWithAI(textarea, btn, statusEl) {
+  // Start from existing text, or generate from fields if empty
+  var base = (F.narrative && F.narrative.trim()) ? F.narrative.trim() : generateNarrative();
+  if (!base || base.length < 10) {
+    statusEl.textContent = 'Fill in some incident details first, then try again.';
+    statusEl.style.color = '#8b0000';
+    return;
+  }
+
+  var origLabel = btn.textContent;
+  btn.textContent = '⏳ Polishing…';
+  btn.disabled = true;
+  statusEl.style.color = '#888';
+  statusEl.textContent = 'Contacting AI to rewrite the narrative…';
+
+  // Build a compact facts block so the model stays accurate to the data
+  var facts = [];
+  if (F.date) facts.push('Date: ' + F.date);
+  if (F.disp) facts.push('Dispatched: ' + F.disp);
+  if (F.inQ) facts.push('In quarters: ' + F.inQ);
+  var nt = effVal(F.nerisType, F.nerisTypeOther); if (nt) facts.push('Incident type: ' + nt);
+  if (F.address) facts.push('Address: ' + F.address);
+  var lu = effVal(F.locationUse, F.locationUseOther); if (lu && lu!=='N/A') facts.push('Location/use: ' + lu);
+  if (F.responseMode) facts.push('Response mode: ' + F.responseMode);
+  var ac = effVal(F.arrivalCond, F.arrivalCondOther); if (ac) facts.push('On arrival: ' + ac);
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: "You are helping a volunteer fire department write the narrative section of an official incident run report. "
+            + "Rewrite the draft below into a clear, professional, natural-sounding incident narrative in past tense, third person, using standard fire-service terminology. "
+            + "Keep every fact exactly as given — do not invent times, names, actions, or outcomes, and do not add anything not present. "
+            + "Use flowing prose (no bullet points, no headings), 1-2 short paragraphs. Return ONLY the narrative text with no preamble.\n\n"
+            + "KEY FACTS:\n" + facts.join('\n') + "\n\nDRAFT NARRATIVE:\n" + base
+        }]
+      })
+    });
+    const data = await response.json();
+    var out = '';
+    if (data && Array.isArray(data.content)) {
+      out = data.content.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+    }
+    if (out) {
+      F.narrative = out; saveForm();
+      textarea.value = out;
+      statusEl.style.color = '#2d6a2d';
+      statusEl.textContent = '✓ Rewritten. Review and edit as needed — verify all facts before filing.';
+    } else {
+      throw new Error('Empty response');
+    }
+  } catch (err) {
+    statusEl.style.color = '#8b0000';
+    statusEl.textContent = '✗ Could not reach the AI (check your internet connection). The "Generate from Fields" version still works offline.';
+  } finally {
+    btn.textContent = origLabel;
+    btn.disabled = false;
+  }
 }
 
 // Builds the Personnel Injured card (used on the Personnel tab)
