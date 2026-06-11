@@ -410,22 +410,64 @@ const NERIS_CATEGORIES = [
 const LOCATION_USE_TYPES = ["Residential — single family","Residential — multi family","Commercial/Business","Industrial/Manufacturing","Assembly/Institutional","Educational/School","Healthcare","Storage/Warehouse","Agricultural/Farm","Vehicle","Roadway/Highway","Outdoor/Open Land","Vacant/Abandoned","Other","N/A"];
 const RESPONSE_MODES = ["Emergency (lights & siren)","Non-Emergency (cold)","Cancelled En Route","Standby/Cover Assignment"];
 const ARRIVAL_CONDITIONS = ["Nothing Showing","Smoke Showing","Fire Showing","Working Fire","Fully Involved","Already Extinguished","Patient(s) on Scene","Hazard Present","Cancelled En Route","Nothing Found","Other"];
-const ACTIONS_TAKEN = ["Fire Attack/Suppression","Search & Rescue","Ventilation","Forcible Entry","Overhaul","Extrication","Patient Care/EMS","Traffic Control","Salvage","Investigation","Established Water Supply","Stood By","Assisted Other Agency","Scene Lighting","Hazmat Control","No Action Required"];
+// ── NERIS Actions & Tactics (tactic category → actions) ──
+// Mirrors the official NERIS Actions & Tactics taxonomy. A practical subset
+// of categories/actions for a volunteer FD; specialized ones (USAR K9,
+// cave/mine, fenceline monitoring) are omitted for brevity but the wording
+// matches NERIS exactly. Selections are stored as "Category: Action".
+const NERIS_TACTICS = [
+  { cat:"Command & Control", actions:[
+    "Establish Incident Command","Incident Assessment (360 Completed)","Accountability",
+    "Officer Assigned","Safety Officer Assigned","Notify Other Agencies"] },
+  { cat:"Suppression", actions:[
+    "Structural Fire Suppression — Interior","Structural Fire Suppression — Exterior",
+    "Structural Fire Suppression — Interior and Exterior","Outside Fire Suppression",
+    "Established Fire Lines","Confinement","Structure Protection","Fire Control/Extinguishment"] },
+  { cat:"Ventilation", actions:[
+    "Ventilation Performed"] },
+  { cat:"Forcible Entry", actions:[
+    "Forcible Entry Performed"] },
+  { cat:"Search — Structure", actions:[
+    "Primary Search","Secondary Search"] },
+  { cat:"Search — Non-Structure", actions:[
+    "Wide Area / Outdoor Search","Search Waterway","Search Area of Collapse","Body Recovery"] },
+  { cat:"Emergency Medical Care", actions:[
+    "Patient Assessment","Provide Basic Life Support","Provide Advanced Life Support",
+    "Provide Transport","Patient Referral"] },
+  { cat:"Salvage & Overhaul", actions:[
+    "Overhaul","Salvage / Property Conservation"] },
+  { cat:"Hazardous Situation Mitigation", actions:[
+    "Leak Stop","Spill Control","Remove Hazard","Decontamination","Atmospheric Monitoring (Interior)","Take Samples"] },
+  { cat:"Evacuation", actions:[
+    "Nearby Buildings","Large Area","Connected Interior Spaces"] },
+  { cat:"Equipment", actions:[
+    "Provide Light","Provide Electrical Power","Provide Drone / Video Equipment","Provide Special Equipment"] },
+  { cat:"Services", actions:[
+    "Control Traffic","Control Crowd","Assist Uninjured Person","Assist Animal",
+    "Provide Apparatus/Water","Remove Water","Secure Property","Damage Assessment",
+    "Shut Down Alarm","Restore/Reset Alarm System","Shut Down Sprinkler System","Restore Sprinkler System"] },
+  { cat:"Information / Enforcement", actions:[
+    "Enforce Code or Law","Provide Public Information","Refer to Proper AHJ"] },
+  { cat:"No Action", actions:[
+    "No Action Required"] },
+];
 const WATER_SUPPLY = ["N/A","Hydrant","Tanker Shuttle","Draft/Static Source","Booster Tank Only","Mutual Aid Tankers"];
 const DISPOSITIONS = ["Fire Extinguished","Fire Controlled","Out on Arrival","Patient Transported","Patient Refused","Turned Over to Owner","Turned Over to PD","Turned Over to Other Agency","Investigation Pending","False Alarm","No Incident Found","Cancelled"];
 const CAUSES = ["Undetermined","Under Investigation","Accidental","Electrical","Cooking","Heating Equipment","Smoking","Open Flame","Vehicle/Mechanical","Intentional","Natural (lightning/weather)","N/A"];
 
 const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
-const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVA","EMS","Law","Remarks","Finalize"];
+const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVC","EMS","Law","Narrative","Finalize"];
 
 const EMPTY = {
   date:"", runNum:"", ic:"",
   disp:"", enroute:"", arrived:"", clear:"", inQ:"",
   dispActual:"", address:"",
-  nerisCat:"", nerisType:"", locationUse:"", responseMode:"", arrivalCond:"", actionsTaken:[], waterSupply:"", disposition:"", cause:"", narrative:"",
+  nerisCat:"", nerisType:"", nerisTypeOther:"", locationUse:"", locationUseOther:"", responseMode:"", arrivalCond:"", arrivalCondOther:"", actionsTaken:[], waterSupply:"", disposition:"", cause:"", narrative:"",
+  mvcVehicles:"", mvcExtrication:"", mvcEntrapped:"", mvcHazards:[],
   apparatus:{}, apparatusDriver:{}, personnel:{},
   emtCt:"", intCt:"", totalCt:"",
   injName:"", injNum:"", rptFiled:"",
+  numPatients:"",
   amb:[{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""}],
   refusedPcr:["","",""],
   law:["","",""],
@@ -482,6 +524,9 @@ function loadForm() {
   // narrative fields: ensure present (added in later version)
   if (typeof data.nerisCat !== 'string') data.nerisCat = '';
   if (typeof data.nerisType !== 'string') data.nerisType = '';
+  if (typeof data.nerisTypeOther !== 'string') data.nerisTypeOther = '';
+  if (typeof data.locationUseOther !== 'string') data.locationUseOther = '';
+  if (typeof data.arrivalCondOther !== 'string') data.arrivalCondOther = '';
   if (typeof data.locationUse !== 'string') data.locationUse = '';
   // migrate old NFIRS fields if present
   if (data.nfirsType && !data.nerisType) data.nerisType = data.nfirsType;
@@ -489,13 +534,21 @@ function loadForm() {
   delete data.nfirsType; delete data.propertyType;
   delete data.dispType; delete data.dispDetail;
   delete data.locCode;
+  delete data._openTactic;
   if (typeof data.responseMode !== 'string') data.responseMode = '';
   if (typeof data.arrivalCond !== 'string') data.arrivalCond = '';
   if (!Array.isArray(data.actionsTaken)) data.actionsTaken = [];
+  // Drop legacy flat action labels (pre-NERIS-tactics format had no "Category: " prefix)
+  data.actionsTaken = data.actionsTaken.filter(function(a){ return typeof a==='string' && a.indexOf(': ')>=0; });
   if (typeof data.waterSupply !== 'string') data.waterSupply = '';
   if (typeof data.disposition !== 'string') data.disposition = '';
   if (typeof data.cause !== 'string') data.cause = '';
   if (typeof data.narrative !== 'string') data.narrative = '';
+  if (typeof data.numPatients !== 'string') data.numPatients = '';
+  if (typeof data.mvcVehicles !== 'string') data.mvcVehicles = '';
+  if (typeof data.mvcExtrication !== 'string') data.mvcExtrication = '';
+  if (typeof data.mvcEntrapped !== 'string') data.mvcEntrapped = '';
+  if (!Array.isArray(data.mvcHazards)) data.mvcHazards = [];
 
   // Strip retired fields from older saved reports (no longer used)
   delete data.enteredBy; delete data.badge; delete data.entryDate;
@@ -703,6 +756,38 @@ function field(labelText, inputEl, mb=10) {
   return w;
 }
 
+// A labeled dropdown that reveals a free-text box when an "Other" option is
+// chosen. `getVal`/`setVal` read/write the main value; `getOther`/`setOther`
+// read/write the companion custom text. The text box shows whenever the
+// selected option label starts with or equals "Other".
+function fieldWithOther(labelText, value, options, onChange, otherValue, onOtherChange, mb=10) {
+  const w = document.createElement('div');
+  w.className = 'field-row';
+  w.style.marginBottom = mb+'px';
+  w.appendChild(lbl(labelText));
+
+  function isOther(v){ return typeof v === 'string' && /^other\b/i.test(v.trim()); }
+
+  const otherBox = document.createElement('input');
+  otherBox.type = 'text';
+  otherBox.className = 'inp';
+  otherBox.placeholder = 'Please specify…';
+  otherBox.value = otherValue || '';
+  otherBox.style.marginTop = '8px';
+  otherBox.style.display = isOther(value) ? 'block' : 'none';
+  otherBox.addEventListener('input', e => onOtherChange(e.target.value));
+
+  const dd = sel(value, options, v => {
+    onChange(v);
+    otherBox.style.display = isOther(v) ? 'block' : 'none';
+    if (!isOther(v)) { otherBox.value = ''; onOtherChange(''); }
+  });
+
+  w.appendChild(dd);
+  w.appendChild(otherBox);
+  return w;
+}
+
 function flexRow(...children) {
   const d = document.createElement('div');
   d.className = 'flex-row';
@@ -798,6 +883,12 @@ function ambRow(i, renderFn) {
 
 function tabEMS() {
   const wrap = document.createElement('div');
+
+  // ── Number of Patients ───────────────────────────────────
+  const npBody = document.createElement('div');
+  const npOpts = [["","— Select —"],["0","0"],["1","1"],["2","2"],["3","3"],["4","4"],["5","5"],["6+","6 or more"]];
+  npBody.appendChild(field('Number of Patients', sel(F.numPatients||'', npOpts, v=>{F.numPatients=v;saveForm();})));
+  wrap.appendChild(card('Patients', npBody));
 
   // ── Ambulances — progressive reveal ─────────────────────
   const emsCard = document.createElement('div');
@@ -1308,38 +1399,83 @@ function tabDispatch() {
   if (F.nerisCat) {
     const catObj = NERIS_CATEGORIES.find(x => x.code === F.nerisCat);
     if (catObj) {
-      niBody.appendChild(field('Incident Type — ' + catObj.label,
-        sel(F.nerisType||'', optList(catObj.subtypes), v=>{F.nerisType=v;saveForm();})));
+      niBody.appendChild(fieldWithOther('Incident Type — ' + catObj.label,
+        F.nerisType||'', optList(catObj.subtypes),
+        v=>{F.nerisType=v;saveForm();},
+        F.nerisTypeOther||'', v=>{F.nerisTypeOther=v;saveForm();}));
     }
   }
   wrap.appendChild(card('Incident Type (NERIS)', niBody));
 
   // ── Incident Details ─────────────────────────────────────
   const detailBody = document.createElement('div');
-  detailBody.appendChild(field('Location / Use Type', sel(F.locationUse||'', optList(LOCATION_USE_TYPES), v=>{F.locationUse=v;saveForm();})));
+  detailBody.appendChild(fieldWithOther('Location / Use Type',
+    F.locationUse||'', optList(LOCATION_USE_TYPES),
+    v=>{F.locationUse=v;saveForm();},
+    F.locationUseOther||'', v=>{F.locationUseOther=v;saveForm();}));
   detailBody.appendChild(field('Response Mode', sel(F.responseMode||'', optList(RESPONSE_MODES), v=>{F.responseMode=v;saveForm();})));
-  detailBody.appendChild(field('Conditions on Arrival', sel(F.arrivalCond||'', optList(ARRIVAL_CONDITIONS), v=>{F.arrivalCond=v;saveForm();})));
+  detailBody.appendChild(fieldWithOther('Conditions on Arrival',
+    F.arrivalCond||'', optList(ARRIVAL_CONDITIONS),
+    v=>{F.arrivalCond=v;saveForm();},
+    F.arrivalCondOther||'', v=>{F.arrivalCondOther=v;saveForm();}));
   wrap.appendChild(card('Incident Details', detailBody));
 
-  // ── Actions & Tactics (multi-select chip grid) ───────────
+  // ── Actions & Tactics (NERIS: tactic category → actions) ──
   const actBody = document.createElement('div');
   if (!Array.isArray(F.actionsTaken)) F.actionsTaken = [];
-  const chipGrid = document.createElement('div');
-  chipGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:7px';
-  for (const act of ACTIONS_TAKEN) {
-    const on = F.actionsTaken.includes(act);
-    const chip = document.createElement('button');
-    chip.textContent = (on ? '\u2713 ' : '') + act;
-    chip.style.cssText = 'padding:8px 12px;border-radius:18px;font-size:12.5px;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
-      + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#5a3000');
-    chip.addEventListener('click', () => {
-      if (F.actionsTaken.includes(act)) F.actionsTaken = F.actionsTaken.filter(a => a !== act);
-      else F.actionsTaken.push(act);
-      saveForm(); renderTab();
+
+  const actHelp = document.createElement('div');
+  actHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
+  actHelp.textContent = 'Tap a tactic to expand it, then check the specific actions taken (NERIS).';
+  actBody.appendChild(actHelp);
+
+  for (const t of NERIS_TACTICS) {
+    // how many actions in this category are selected
+    const selCount = t.actions.filter(a => F.actionsTaken.includes(t.cat + ': ' + a)).length;
+    const open = F._openTactic === t.cat;
+
+    // Category header button
+    const catBtn = document.createElement('button');
+    catBtn.style.cssText = 'width:100%;text-align:left;padding:10px 12px;margin-bottom:'
+      + (open ? '0' : '6px') + ';border-radius:' + (open ? '8px 8px 0 0' : '8px')
+      + ';font-size:13.5px;font-weight:700;font-family:Georgia,serif;cursor:pointer;'
+      + 'display:flex;justify-content:space-between;align-items:center;border:1.5px solid '
+      + (selCount ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#8b0000');
+    const catLabel = document.createElement('span');
+    catLabel.textContent = t.cat + (selCount ? '  (' + selCount + ')' : '');
+    const catArrow = document.createElement('span');
+    catArrow.textContent = open ? '\u25be' : '\u25b8';
+    catArrow.style.opacity = '0.7';
+    catBtn.appendChild(catLabel);
+    catBtn.appendChild(catArrow);
+    catBtn.addEventListener('click', () => {
+      F._openTactic = open ? '' : t.cat;
+      renderTab();
     });
-    chipGrid.appendChild(chip);
+    actBody.appendChild(catBtn);
+
+    // Expanded action chips for the open category
+    if (open) {
+      const actGrid = document.createElement('div');
+      actGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:10px;margin-bottom:6px;'
+        + 'border:1.5px solid #8b0000;border-top:none;border-radius:0 0 8px 8px;background:#fffdf9';
+      for (const a of t.actions) {
+        const key = t.cat + ': ' + a;
+        const on = F.actionsTaken.includes(key);
+        const chip = document.createElement('button');
+        chip.textContent = (on ? '\u2713 ' : '') + a;
+        chip.style.cssText = 'padding:7px 11px;border-radius:16px;font-size:12px;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
+          + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff;color:#5a3000');
+        chip.addEventListener('click', () => {
+          if (F.actionsTaken.includes(key)) F.actionsTaken = F.actionsTaken.filter(x => x !== key);
+          else F.actionsTaken.push(key);
+          saveForm(); renderTab();
+        });
+        actGrid.appendChild(chip);
+      }
+      actBody.appendChild(actGrid);
+    }
   }
-  actBody.appendChild(chipGrid);
   wrap.appendChild(card('Actions & Tactics', actBody));
 
   // ── Outcome ──────────────────────────────────────────────
@@ -1353,6 +1489,13 @@ function tabDispatch() {
 }
 
 // ── Auto-narrative generator ─────────────────────────────
+// Returns the custom "Other" text when the selected value is an Other option,
+// otherwise the value itself.
+function effVal(main, other){
+  if (typeof main==='string' && /^other\b/i.test(main.trim()) && other) return other;
+  return main;
+}
+
 function generateNarrative() {
   function fmtDur2(t1,t2){
     function pm(t){if(!t)return null;var p=t.split(':');var h=parseInt(p[0]||0),m=parseInt(p[1]||0);return isNaN(h)||isNaN(m)?null:h*60+m;}
@@ -1372,9 +1515,11 @@ function generateNarrative() {
   // Sentence 1 — dispatch
   let s1 = 'On ' + (F.date||'[date]') + ' at ' + (F.disp||'[time]') + ', Aurelius Fire & Rescue was dispatched';
   if (F.responseMode) s1 += ' ' + F.responseMode.replace(/ \(.*\)/,'').toLowerCase();
-  s1 += ' to a reported ' + (F.nerisType ? F.nerisType.toLowerCase() : 'incident');
+  var nerisTypeEff = effVal(F.nerisType, F.nerisTypeOther);
+  var locationUseEff = effVal(F.locationUse, F.locationUseOther);
+  s1 += ' to a reported ' + (nerisTypeEff ? nerisTypeEff.toLowerCase() : 'incident');
   if (F.address) s1 += ' at ' + F.address;
-  if (F.locationUse && F.locationUse!=='N/A') s1 += ' (' + F.locationUse.toLowerCase() + ')';
+  if (locationUseEff && locationUseEff!=='N/A') s1 += ' (' + locationUseEff.toLowerCase() + ')';
   s1 += '.';
   s.push(s1);
 
@@ -1389,12 +1534,47 @@ function generateNarrative() {
     s.push(s2);
   }
 
-  // Sentence 3 — arrival
-  if (F.arrivalCond) s.push('Upon arrival, crews found ' + F.arrivalCond.toLowerCase() + '.');
+  // Sentence 3 — arrival (+ patient count when applicable)
+  var arrivalEff = effVal(F.arrivalCond, F.arrivalCondOther);
+  if (arrivalEff) {
+    var s3 = 'Upon arrival, crews found ' + arrivalEff.toLowerCase();
+    if (F.numPatients && F.numPatients !== '0' && F.numPatients !== '') {
+      var pc = F.numPatients === '6+' ? '6 or more patients'
+        : (F.numPatients === '1' ? '1 patient' : F.numPatients + ' patients');
+      s3 += ' with ' + pc;
+    }
+    s3 += '.';
+    s.push(s3);
+  } else if (F.numPatients && F.numPatients !== '0' && F.numPatients !== '') {
+    var pc2 = F.numPatients === '6+' ? '6 or more patients'
+      : (F.numPatients === '1' ? '1 patient' : F.numPatients + ' patients');
+    s.push('Crews found ' + pc2 + ' on scene.');
+  }
 
-  // Sentence 4 — actions
+  // MVC sentence (collision details, whenever any are filled in)
+  if (F.mvcVehicles || F.mvcExtrication || (F.mvcHazards && F.mvcHazards.length)) {
+    var sm = 'The collision involved ';
+    sm += (F.mvcVehicles ? (F.mvcVehicles === '6+' ? '6 or more vehicles' : (F.mvcVehicles === '1' ? '1 vehicle' : F.mvcVehicles + ' vehicles')) : 'one or more vehicles');
+    if (F.mvcExtrication === 'YES') {
+      sm += ', requiring extrication';
+      if (F.mvcEntrapped) sm += ' of ' + (F.mvcEntrapped === '5+' ? '5 or more occupants' : (F.mvcEntrapped === '1' ? '1 occupant' : F.mvcEntrapped + ' occupants'));
+    } else if (F.mvcExtrication === 'NO') {
+      sm += ' with no extrication required';
+    }
+    sm += '.';
+    s.push(sm);
+    if (F.mvcHazards && F.mvcHazards.length) {
+      s.push('Hazards on scene included ' + joinList(F.mvcHazards.map(function(h){return h.toLowerCase();})) + '.');
+    }
+  }
+
+  // Sentence 4 — actions (strip the "Category: " prefix for readability)
   if (Array.isArray(F.actionsTaken) && F.actionsTaken.length) {
-    s.push('Personnel performed ' + joinList(F.actionsTaken.map(a=>a.toLowerCase())) + '.');
+    var actNames = F.actionsTaken.map(function(a){
+      var i = a.indexOf(': ');
+      return (i>=0 ? a.slice(i+2) : a).toLowerCase();
+    });
+    s.push('Personnel performed ' + joinList(actNames) + '.');
   }
 
   // Sentence 5 — water supply
@@ -1406,12 +1586,31 @@ function generateNarrative() {
     s.push('Mutual aid was ' + (dir?dir:'coordinated') + ' with ' + joinList(mutArr) + '.');
   }
 
-  // Sentence 7 — EMS
-  if (ambArr.length) s.push('Patient care was provided and transport was handled by ' + joinList(ambArr) + '.');
+  // Sentence 7 + 8 — EMS / disposition (combined to avoid double-up)
+  var disp = F.disposition || '';
+  var isPatientDisp = disp === 'Patient Transported' || disp === 'Patient Refused';
+  var dispHandled = false;
 
-  // Sentence 8 — outcome + cause + clear
+  if (ambArr.length) {
+    // EMS present — phrase patient care + outcome together
+    if (disp === 'Patient Transported') {
+      s.push('Patient care was provided and the patient was transported by ' + joinList(ambArr) + '.');
+      dispHandled = true;
+    } else if (disp === 'Patient Refused') {
+      s.push('Patient care was provided by ' + joinList(ambArr) + '; the patient refused transport.');
+      dispHandled = true;
+    } else {
+      s.push('Patient care was provided and transport was handled by ' + joinList(ambArr) + '.');
+    }
+  } else if (isPatientDisp) {
+    // Patient disposition but no ambulance listed
+    if (disp === 'Patient Transported') { s.push('The patient was transported.'); dispHandled = true; }
+    else { s.push('The patient refused transport.'); dispHandled = true; }
+  }
+
+  // Outcome (skip if already covered by the patient sentence above) + cause + clear
   let s8 = '';
-  if (F.disposition) s8 += 'The incident was ' + F.disposition.toLowerCase() + '.';
+  if (disp && !dispHandled) s8 += 'The incident was resolved as ' + disp.toLowerCase() + '.';
   if (F.cause && !['Undetermined','N/A','Under Investigation'].includes(F.cause)) {
     s8 += (s8?' ':'') + 'The cause was determined to be ' + F.cause.toLowerCase() + '.';
   } else if (F.cause==='Under Investigation') {
@@ -1558,6 +1757,10 @@ function tabPersonnel() {
   countCard.appendChild(countTitle);
   countCard.appendChild(countBody);
   wrap.appendChild(countCard);
+
+  // ── Personnel Injured ────────────────────────────────────
+  wrap.appendChild(injuredCard());
+
   return wrap;
 }
 
@@ -1823,6 +2026,53 @@ function lawRow(idx, renderFn) {
 function tabMVA() {
   const wrap = document.createElement('div');
 
+  // ── MVC Details (collision specifics — NERIS) ────────────
+  const mvcBody = document.createElement('div');
+
+  const mvcHelp = document.createElement('div');
+  mvcHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
+  mvcHelp.textContent = 'Collision details (NERIS). Individual vehicle make / plate / color are recorded below.';
+  mvcBody.appendChild(mvcHelp);
+
+  const mvcVehOpts = [["","— Select —"],["1","1"],["2","2"],["3","3"],["4","4"],["5","5"],["6+","6 or more"]];
+  mvcBody.appendChild(field('Number of Vehicles Involved', sel(F.mvcVehicles||'', mvcVehOpts, v=>{F.mvcVehicles=v;saveForm();})));
+
+  const mvcYnOpts = [["","— Select —"],["YES","Yes"],["NO","No"]];
+  mvcBody.appendChild(field('Extrication Required', sel(F.mvcExtrication||'', mvcYnOpts, v=>{F.mvcExtrication=v;saveForm();renderTab();})));
+
+  // Number entrapped only if extrication required
+  if (F.mvcExtrication === 'YES') {
+    const mvcEntOpts = [["","— Select —"],["1","1"],["2","2"],["3","3"],["4","4"],["5+","5 or more"]];
+    mvcBody.appendChild(field('Number Entrapped', sel(F.mvcEntrapped||'', mvcEntOpts, v=>{F.mvcEntrapped=v;saveForm();})));
+  }
+
+  // Hazards present — multi-select chips
+  const mvcHazLbl = document.createElement('div');
+  mvcHazLbl.className = 'lbl';
+  mvcHazLbl.textContent = 'Hazards Present';
+  mvcHazLbl.style.cssText = 'margin-bottom:6px;margin-top:4px';
+  mvcBody.appendChild(mvcHazLbl);
+
+  if (!Array.isArray(F.mvcHazards)) F.mvcHazards = [];
+  const MVC_HAZARDS = ['Fuel/Fluid Spill','Vehicle Fire','Rollover','Downed Wires','Entrapment','Hazmat Load','Vehicle Unstable','Traffic Hazard'];
+  const mvcHazGrid = document.createElement('div');
+  mvcHazGrid.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+  for (const hz of MVC_HAZARDS) {
+    const on = F.mvcHazards.includes(hz);
+    const chip = document.createElement('button');
+    chip.textContent = (on ? '\u2713 ' : '') + hz;
+    chip.style.cssText = 'padding:7px 11px;border-radius:16px;font-size:12px;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
+      + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#5a3000');
+    chip.addEventListener('click', () => {
+      if (F.mvcHazards.includes(hz)) F.mvcHazards = F.mvcHazards.filter(x => x !== hz);
+      else F.mvcHazards.push(hz);
+      saveForm(); renderTab();
+    });
+    mvcHazGrid.appendChild(chip);
+  }
+  mvcBody.appendChild(mvcHazGrid);
+  wrap.appendChild(card('MVC Details', mvcBody));
+
   // Ensure cars array has 6 slots
   while (F.cars.length < 6) F.cars.push({model:"",plate:"",color:""});
 
@@ -1950,16 +2200,54 @@ function tabLaw() {
 function tabRemarks() {
   const wrap = document.createElement('div');
 
-  // ── Remarks ──────────────────────────────────────────────
-  const ta = document.createElement('textarea');
-  ta.className = 'ta';
-  ta.rows = 5;
-  ta.placeholder = 'Cause of incident, extent of damage, insurance carrier…';
-  ta.value = F.remarks;
-  ta.addEventListener('input', e => { F.remarks = e.target.value; saveForm(); });
-  wrap.appendChild(card('Remarks', lbl('Cause of Incident, Damage, Insurance Carrier, etc.'), ta));
+  // ── Incident Narrative ───────────────────────────────────
+  const nCard = document.createElement('div');
+  nCard.className = 'card';
+  const nTitle = document.createElement('div');
+  nTitle.className = 'card-title';
+  nTitle.textContent = 'Incident Narrative';
+  const nBody = document.createElement('div');
+  nBody.className = 'card-body';
 
-  // ── Personnel Injured ────────────────────────────────────
+  const nHelp = document.createElement('div');
+  nHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
+  nHelp.textContent = 'Auto-write a narrative from the data entered on the other tabs, then edit as needed. Include cause of incident, extent of damage, insurance carrier, etc.';
+  nBody.appendChild(nHelp);
+
+  const nTa = document.createElement('textarea');
+  nTa.className = 'ta';
+  nTa.rows = 9;
+  nTa.placeholder = 'Tap "Generate from Fields" to auto-write a narrative, then edit as needed.';
+  nTa.value = F.narrative || '';
+  Object.assign(nTa.style, { fontSize:'14px', lineHeight:'1.5', marginBottom:'8px' });
+  nTa.addEventListener('input', e => { F.narrative = e.target.value; saveForm(); });
+  nBody.appendChild(nTa);
+
+  const genBtn = document.createElement('button');
+  genBtn.textContent = '✨ Generate from Fields';
+  genBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif;margin-right:8px';
+  genBtn.addEventListener('click', () => {
+    const text = generateNarrative();
+    F.narrative = text; saveForm();
+    nTa.value = text;
+  });
+  nBody.appendChild(genBtn);
+
+  const clrBtn = document.createElement('button');
+  clrBtn.textContent = '✕ Clear';
+  clrBtn.style.cssText = 'background:none;border:1.5px solid #c8a97a;color:#8b0000;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:600;font-family:Georgia,serif';
+  clrBtn.addEventListener('click', () => { F.narrative=''; saveForm(); nTa.value=''; });
+  nBody.appendChild(clrBtn);
+
+  nCard.appendChild(nTitle);
+  nCard.appendChild(nBody);
+  wrap.appendChild(nCard);
+
+  return wrap;
+}
+
+// Builds the Personnel Injured card (used on the Personnel tab)
+function injuredCard() {
   const injCard = document.createElement('div');
   injCard.className = 'card';
   const injTitle = document.createElement('div');
@@ -2012,9 +2300,7 @@ function tabRemarks() {
 
   injCard.appendChild(injTitle);
   injCard.appendChild(injBody);
-  wrap.appendChild(injCard);
-
-  return wrap;
+  return injCard;
 }
 
 function tabPreview() {
@@ -2034,44 +2320,6 @@ function tabPreview() {
   rbCard.appendChild(rbTitle);
   rbCard.appendChild(rbBody);
   wrap.appendChild(rbCard);
-
-  // ── Narrative card ───────────────────────────────────────
-  const nCard = document.createElement('div');
-  nCard.className = 'card';
-  const nTitle = document.createElement('div');
-  nTitle.className = 'card-title';
-  nTitle.textContent = 'Incident Narrative';
-  const nBody = document.createElement('div');
-  nBody.className = 'card-body';
-
-  const nTa = document.createElement('textarea');
-  nTa.className = 'ta';
-  nTa.rows = 7;
-  nTa.placeholder = 'Tap "Generate from Fields" to auto-write a narrative from the data you entered, then edit as needed.';
-  nTa.value = F.narrative || '';
-  Object.assign(nTa.style, { fontSize:'14px', lineHeight:'1.5', marginBottom:'8px' });
-  nTa.addEventListener('input', e => { F.narrative = e.target.value; saveForm(); });
-  nBody.appendChild(nTa);
-
-  const genBtn = document.createElement('button');
-  genBtn.textContent = '✨ Generate from Fields';
-  genBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif;margin-right:8px';
-  genBtn.addEventListener('click', () => {
-    const text = generateNarrative();
-    F.narrative = text; saveForm();
-    nTa.value = text;
-  });
-  nBody.appendChild(genBtn);
-
-  const clrBtn = document.createElement('button');
-  clrBtn.textContent = '✕ Clear';
-  clrBtn.style.cssText = 'background:none;border:1.5px solid #c8a97a;color:#8b0000;border-radius:8px;padding:10px 14px;font-size:14px;font-weight:600;font-family:Georgia,serif';
-  clrBtn.addEventListener('click', () => { F.narrative=''; saveForm(); nTa.value=''; });
-  nBody.appendChild(clrBtn);
-
-  nCard.appendChild(nTitle);
-  nCard.appendChild(nBody);
-  wrap.appendChild(nCard);
 
   const btn = document.createElement('button');
   btn.className = 'btn-print';
@@ -2275,11 +2523,12 @@ function buildPrintHTML() {
   // INCIDENT INFO
   H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
   H+=shdr('Incident Information');
-  var nerisLbl = F.nerisType ? (nerisCatLabel(F.nerisCat)+": "+F.nerisType) : "—";
+  var nerisTypeEffP = effVal(F.nerisType, F.nerisTypeOther);
+  var nerisLbl = nerisTypeEffP ? (nerisCatLabel(F.nerisCat)+": "+nerisTypeEffP) : "—";
   H+='<tr>'+lcell("28%","Incident Commander",icName)+lcell("28%","Incident Type (NERIS)",nerisLbl)
     +lcell("44%","Address",F.address||"—")+'</tr>';
   H+='<tr>'+lcell("33%","Response Mode",F.responseMode||"—")
-    +lcell("29%","Location / Use",F.locationUse||"—")+lcell("38%","Conditions on Arrival",F.arrivalCond||"—")+'</tr>';
+    +lcell("29%","Location / Use",effVal(F.locationUse,F.locationUseOther)||"—")+lcell("38%","Conditions on Arrival",effVal(F.arrivalCond,F.arrivalCondOther)||"—")+'</tr>';
   if(F.dispActual) H+='<tr><td colspan="4" style="padding:2px 7px;border:1px solid #ddd;font-size:7pt;color:#444"><b>Dispatch:</b> '+F.dispActual+'</td></tr>';
   H+='</tbody></table>';
 
@@ -2350,7 +2599,14 @@ function buildPrintHTML() {
     H+='</tbody></table>';
   }
 
-  // LAW + EMS
+  // MVC DETAILS (collision-specific, when any are filled in)
+  if(F.mvcVehicles||F.mvcExtrication||(F.mvcHazards&&F.mvcHazards.length)){
+    var mvcBits=[];
+    if(F.mvcVehicles) mvcBits.push('<b>Vehicles:</b> '+F.mvcVehicles);
+    if(F.mvcExtrication) mvcBits.push('<b>Extrication:</b> '+F.mvcExtrication+(F.mvcExtrication==='YES'&&F.mvcEntrapped?' ('+F.mvcEntrapped+' entrapped)':''));
+    if(F.mvcHazards&&F.mvcHazards.length) mvcBits.push('<b>Hazards:</b> '+F.mvcHazards.join(', '));
+    H+='<div style="font-size:7.5pt;padding:2px 7px;margin-bottom:4px;border-left:3px solid #555"><b>MVC:</b> &nbsp;'+mvcBits.join(' &nbsp;|&nbsp; ')+'</div>';
+  }
   if(usedLaw.length||usedAmbs.length){
     H+='<table style="margin-bottom:4px"><tr valign="top">';
     if(usedLaw.length){
@@ -2361,7 +2617,7 @@ function buildPrintHTML() {
       H+='</tbody></table></td>';
     }
     if(usedAmbs.length){
-      H+='<td style="'+(usedLaw.length?"padding-left:4px":"")+'"><table style="border:1px solid #ccc"><tbody>'+shdr('EMS / Ambulances')
+      H+='<td style="'+(usedLaw.length?"padding-left:4px":"")+'"><table style="border:1px solid #ccc"><tbody>'+shdr('EMS / Ambulances'+(F.numPatients?'  —  '+F.numPatients+' patient'+(F.numPatients==='1'?'':'s'):''))
         +'<tr style="background:#f8f8f8"><th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:22px">#</th>'
         +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">Service</th>'
         +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:30%">PCR #</th></tr>';
@@ -2375,6 +2631,12 @@ function buildPrintHTML() {
       H+='</td>';
     }
     H+='</tr></table>';
+  }
+
+  // PATIENT COUNT (when set but no ambulance row showed it)
+  if(F.numPatients && F.numPatients!=='0' && !usedAmbs.length){
+    H+='<div style="font-size:7.5pt;padding:2px 7px;margin-bottom:4px;border-left:3px solid #555">'
+      +'<b>Patients:</b> '+F.numPatients+'</div>';
   }
 
   // MUTUAL AID
@@ -2391,11 +2653,13 @@ function buildPrintHTML() {
       +'</tbody></table>';
   }
 
-  // REMARKS — fixed height so it doesn't overflow
-  H+='<table style="width:100%;border:1px solid #ccc;margin-bottom:4px"><tbody>'
-    +shdr('Remarks')
-    +'<tr><td style="padding:5px 7px;font-size:7.5pt;line-height:1.4;white-space:pre-wrap;height:1.4in;vertical-align:top">'+(F.remarks||"")+'</td></tr>'
-    +'</tbody></table>';
+  // REMARKS — only if present (legacy field; narrative now covers this)
+  if(F.remarks){
+    H+='<table style="width:100%;border:1px solid #ccc;margin-bottom:4px"><tbody>'
+      +shdr('Remarks')
+      +'<tr><td style="padding:5px 7px;font-size:7.5pt;line-height:1.4;white-space:pre-wrap;vertical-align:top">'+F.remarks+'</td></tr>'
+      +'</tbody></table>';
+  }
 
   // INJURED
   if(F.injName){
