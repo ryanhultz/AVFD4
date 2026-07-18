@@ -859,6 +859,78 @@ function newReport() {
   tab = 0;
   try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
   render();
+  showCadPasteModal();
+}
+
+// Modal shown at the start of a new report: paste the CAD dispatch email to
+// auto-fill the opening fields. Fully skippable.
+function showCadPasteModal() {
+  // Remove any existing modal first
+  var existing = document.getElementById('cadModal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cadModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;'
+    + 'display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:14px;max-width:560px;width:100%;margin-top:24px;'
+    + 'padding:20px 20px 16px;box-shadow:0 10px 40px rgba(0,0,0,0.35);font-family:Georgia,serif';
+
+  const h = document.createElement('div');
+  h.style.cssText = 'font-size:18px;font-weight:700;color:#8b0000;margin-bottom:4px';
+  h.textContent = 'Start from Dispatch';
+  box.appendChild(h);
+
+  const sub = document.createElement('div');
+  sub.style.cssText = 'font-size:12.5px;color:#777;margin-bottom:12px;line-height:1.45';
+  sub.textContent = 'Paste the CAD dispatch email to auto-fill the incident number, address, time, category, apparatus times, and mutual aid. Or skip and enter it by hand.';
+  box.appendChild(sub);
+
+  const modalTa = document.createElement('textarea');
+  modalTa.className = 'ta';
+  modalTa.rows = 8;
+  modalTa.placeholder = 'Paste the dispatch email / CAD text here…';
+  Object.assign(modalTa.style, { fontSize:'13px', lineHeight:'1.4', width:'100%', marginBottom:'10px' });
+  box.appendChild(modalTa);
+
+  const status = document.createElement('div');
+  status.style.cssText = 'font-size:12px;margin:0 0 12px;line-height:1.4;min-height:16px';
+  box.appendChild(status);
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap';
+
+  const skipBtn = document.createElement('button');
+  skipBtn.textContent = 'Skip';
+  skipBtn.style.cssText = 'background:none;border:1.5px solid #c8a97a;color:#8b0000;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;font-family:Georgia,serif;cursor:pointer';
+  skipBtn.addEventListener('click', () => overlay.remove());
+  btnRow.appendChild(skipBtn);
+
+  const goBtn = document.createElement('button');
+  goBtn.textContent = '⚡ Auto-Fill & Start';
+  goBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;font-family:Georgia,serif;cursor:pointer';
+  goBtn.addEventListener('click', () => {
+    const res = applyDispatchParse(modalTa.value);
+    if (res.filled.length) {
+      overlay.remove();
+      render();
+    } else {
+      status.style.color = '#8b0000';
+      status.textContent = res.anyFound
+        ? 'Those fields are already filled in.'
+        : 'Couldn\u2019t recognize anything in that text. You can skip and enter it by hand.';
+    }
+  });
+  btnRow.appendChild(goBtn);
+
+  box.appendChild(btnRow);
+  overlay.appendChild(box);
+  // Tapping the dark area skips
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  modalTa.focus();
 }
 
 // Load a report from history into the active form
@@ -1662,6 +1734,24 @@ const CAD_UNIT_MAP = {
   "AURTK1": "Tanker 1",
 };
 
+// CAD unit-code prefixes → mutual-aid departments (only those in the
+// mutual-aid dropdown). Used to detect Given/Received aid. County, EMS,
+// and law units (4TNA1A, 547, CCAR1, CFI31, CCREH, EM…) are intentionally
+// omitted.
+const CAD_DEPT_MAP = {
+  "FLM": "Fleming Fire",
+  "OWA": "Owasco Fire",
+  "SEN": "Seneca Falls Fire",
+  "THR": "Throop Fire",
+  "AUB": "Auburn Fire",
+  "CAY": "Cayuga Fire",
+  "UNS": "Union Springs Fire",
+  "PBY": "Port Byron Fire",
+  "WDS": "Weedsport Fire",
+  "MON": "Montezuma Fire",
+  "ARO": "Aurora Fire",
+};
+
 function parseDispatchText(text) {
   const out = {};
   if (!text || !text.trim()) return out;
@@ -1758,21 +1848,107 @@ function parseDispatchText(text) {
   // ── Per-unit times from the "Unit RunTimes" table ──
   // e.g. "AURTA1 ENRT    18:54:32 07/13/26    FLEM4 ..."
   var units = {};
+  var otherDepts = {};   // mutual-aid departments seen in the runtimes
+  var aureliusResponded = false;
   var reUnit = /^\s*([A-Z0-9]{3,8})\s+(DISP|ENRT|ARRVD|COMP|OK)\s+(\d{2}):(\d{2}):\d{2}\s/gm;
   var m2;
   while ((m2 = reUnit.exec(t)) !== null) {
     var code = m2[1].toUpperCase();
     var app = CAD_UNIT_MAP[code];
-    if (!app) continue;
-    var hhmm = m2[3] + ':' + m2[4];
-    if (!units[app]) units[app] = {};
-    if (m2[2] === 'ENRT' && !units[app].enroute) units[app].enroute = hhmm;
-    if (m2[2] === 'ARRVD' && !units[app].arrived) units[app].arrived = hhmm;
-    if (m2[2] === 'DISP') units[app].dispatched = true;
+    if (app) {
+      aureliusResponded = true;
+      var hhmm = m2[3] + ':' + m2[4];
+      if (!units[app]) units[app] = {};
+      if (m2[2] === 'ENRT' && !units[app].enroute) units[app].enroute = hhmm;
+      if (m2[2] === 'ARRVD' && !units[app].arrived) units[app].arrived = hhmm;
+      if (m2[2] === 'DISP') units[app].dispatched = true;
+      continue;
+    }
+    // Not an Aurelius unit — is it a mutual-aid department we know?
+    if (code.indexOf('AUR') === 0) continue; // our own, unmapped variant
+    for (var pfx in CAD_DEPT_MAP) {
+      if (code.indexOf(pfx) === 0) { otherDepts[CAD_DEPT_MAP[pfx]] = true; break; }
+    }
   }
   if (Object.keys(units).length) out._units = units;
 
+  // ── Mutual aid direction (Given / Received) ──
+  // Township tells us whose district the call was in.
+  var deptList = Object.keys(otherDepts);
+  if (aureliusResponded) {
+    var townorm = (twp || '').toLowerCase();
+    var inOurDistrict = !townorm || townorm.indexOf('aurelius') >= 0 || townorm.indexOf('cayuga') >= 0;
+    if (!inOurDistrict) {
+      // Call was in another township and our units went → we GAVE aid.
+      // Only the primary agency (the department whose district it is) is
+      // recorded — not every other department that also responded.
+      out._mutualDir = 'Given';
+      var primary = null;
+      // Match the township to a department in our list (e.g. "Fleming" → "Fleming Fire")
+      for (var d = 0; d < deptList.length; d++) {
+        if (deptList[d].toLowerCase().indexOf(townorm.trim()) === 0) { primary = deptList[d]; break; }
+      }
+      // Fall back: match township against any known department name
+      if (!primary) {
+        for (var pfx2 in CAD_DEPT_MAP) {
+          var nm = CAD_DEPT_MAP[pfx2];
+          if (nm.toLowerCase().indexOf(townorm.trim()) === 0) { primary = nm; break; }
+        }
+      }
+      if (primary) out._mutualAgencies = [primary];
+      else if (deptList.length) out._mutualAgencies = [deptList[0]]; // last resort
+    } else if (deptList.length) {
+      // Call in our own district with other departments present → we RECEIVED
+      // aid from all of them.
+      out._mutualDir = 'Received';
+      out._mutualAgencies = deptList;
+    }
+  }
+
   return out;
+}
+
+// Applies a parsed dispatch to the current form F, filling only blank fields.
+// Returns { filled: [labels], dispText: cleanText|null, anyFound: bool }.
+function applyDispatchParse(rawText) {
+  const got = parseDispatchText(rawText);
+  const filled = [];
+  if (got.runNum && !F.runNum) { F.runNum = got.runNum; filled.push('Incident # ' + got.runNum); }
+  if (got.date && !F.date)     { F.date = got.date;     filled.push('Date ' + got.date); }
+  if (got.disp && !F.disp)     { F.disp = got.disp;     filled.push('Dispatch time ' + got.disp); }
+  if (got.address && !F.address) { F.address = got.address; filled.push('Address ' + got.address); }
+  if (got._cat && !F.nerisCat) {
+    F.nerisCat = got._cat;
+    var cObj = NERIS_CATEGORIES.find(x => x.code === got._cat);
+    filled.push('Category ' + (cObj ? cObj.label : got._cat));
+  }
+  if (got._units) {
+    if (!F.apparatus) F.apparatus = {};
+    if (!F.apparatusEnroute) F.apparatusEnroute = {};
+    if (!F.apparatusArrived) F.apparatusArrived = {};
+    var unitNames = [];
+    Object.keys(got._units).forEach(function(app){
+      var u = got._units[app];
+      if (!F.apparatus[app]) { F.apparatus[app] = true; unitNames.push(app); }
+      if (u.enroute && !F.apparatusEnroute[app]) F.apparatusEnroute[app] = u.enroute;
+      if (u.arrived && !F.apparatusArrived[app]) F.apparatusArrived[app] = u.arrived;
+    });
+    if (unitNames.length) filled.push('Units ' + unitNames.join(', ') + ' (with times)');
+  }
+  if (got._mutualDir && got._mutualAgencies && got._mutualAgencies.length) {
+    if (!Array.isArray(F.mutual)) F.mutual = F.mutual ? [F.mutual] : [];
+    var addedAgencies = [];
+    if (!F.mutualDir) F.mutualDir = got._mutualDir;
+    got._mutualAgencies.forEach(function(ag){
+      if (F.mutual.indexOf(ag) < 0) { F.mutual.push(ag); addedAgencies.push(ag); }
+    });
+    if (addedAgencies.length) filled.push('Mutual Aid ' + got._mutualDir + ': ' + addedAgencies.join(', '));
+  }
+  var dispText = null;
+  if (filled.length && got._dispText) { F.dispActual = got._dispText; dispText = got._dispText; }
+  if (filled.length) { saveForm(); updateHeader(); }
+  const anyFound = !!(got.runNum || got.date || got.disp || got.address || got._cat || got._units);
+  return { filled: filled, dispText: dispText, anyFound: anyFound };
 }
 
 function tabDispatch() {
@@ -1802,45 +1978,15 @@ function tabDispatch() {
   fillBtn.textContent = '⚡ Auto-Fill from Text';
   fillBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif';
   fillBtn.addEventListener('click', () => {
-    const got = parseDispatchText(ta.value);
-    const filled = [];
-    if (got.runNum && !F.runNum) { F.runNum = got.runNum; filled.push('Incident # ' + got.runNum); }
-    if (got.date && !F.date)     { F.date = got.date;     filled.push('Date ' + got.date); }
-    if (got.disp && !F.disp)     { F.disp = got.disp;     filled.push('Dispatch time ' + got.disp); }
-    if (got.address && !F.address) { F.address = got.address; filled.push('Address ' + got.address); }
-    if (got._cat && !F.nerisCat) {
-      F.nerisCat = got._cat;
-      var cObj = NERIS_CATEGORIES.find(x => x.code === got._cat);
-      filled.push('Category ' + (cObj ? cObj.label : got._cat));
-    }
-
-    // Apparatus + per-unit enroute/arrival times
-    if (got._units) {
-      if (!F.apparatus) F.apparatus = {};
-      if (!F.apparatusEnroute) F.apparatusEnroute = {};
-      if (!F.apparatusArrived) F.apparatusArrived = {};
-      var unitNames = [];
-      Object.keys(got._units).forEach(function(app){
-        var u = got._units[app];
-        if (!F.apparatus[app]) { F.apparatus[app] = true; unitNames.push(app); }
-        if (u.enroute && !F.apparatusEnroute[app]) F.apparatusEnroute[app] = u.enroute;
-        if (u.arrived && !F.apparatusArrived[app]) F.apparatusArrived[app] = u.arrived;
-      });
-      if (unitNames.length) filled.push('Units ' + unitNames.join(', ') + ' (with times)');
-    }
-
-    if (filled.length) {
-      // Replace the raw CAD paste with the clean nature + comments
-      if (got._dispText) { F.dispActual = got._dispText; ta.value = got._dispText; }
-      saveForm();
-      updateHeader();
+    const res = applyDispatchParse(ta.value);
+    if (res.filled.length) {
+      if (res.dispText) ta.value = res.dispText;
       fillStatus.style.color = '#2d6a2d';
-      fillStatus.textContent = '✓ Filled: ' + filled.join(' · ') + '. Review everything before filing.';
+      fillStatus.textContent = '✓ Filled: ' + res.filled.join(' · ') + '. Review everything before filing.';
       renderTab();
     } else {
-      const anyFound = got.runNum || got.date || got.disp || got.address || got._cat || got._units;
       fillStatus.style.color = '#8b0000';
-      fillStatus.textContent = anyFound
+      fillStatus.textContent = res.anyFound
         ? 'Nothing added — those fields are already filled in. Clear a field first to re-fill it.'
         : 'Couldn\u2019t recognize anything in that text. Fill the fields in manually.';
     }
@@ -2017,8 +2163,7 @@ function tabDispatch() {
   const outBody = document.createElement('div');
   outBody.appendChild(field('Water Supply', sel(F.waterSupply||'', optList(WATER_SUPPLY), v=>{F.waterSupply=v;saveForm();})));
   outBody.appendChild(field('Disposition / Outcome', sel(F.disposition||'', optList(DISPOSITIONS), v=>{F.disposition=v;saveForm();})));
-  outBody.appendChild(field('Cause (optional)', sel(F.cause||'', optList(CAUSES), v=>{F.cause=v;saveForm();})));
-  wrap.appendChild(card('Outcome', outBody));
+  outBody.appendChild(field('Cause (optional)', sel(F.cause||'', optList(CAUSES), v=>{F.cause=v;saveForm();})));  wrap.appendChild(card('Outcome', outBody));
 
   return wrap;
 }
@@ -2994,24 +3139,31 @@ function tabRemarks() {
   nTa.placeholder = 'Tap "Generate from Fields" to auto-write a narrative, then edit as needed.';
   nTa.value = F.narrative || '';
   Object.assign(nTa.style, { fontSize:'14px', lineHeight:'1.5', marginBottom:'8px' });
-  nTa.addEventListener('input', e => { F.narrative = e.target.value; saveForm(); });
+  nTa.addEventListener('input', e => { F.narrative = e.target.value; F._narrManual = true; saveForm(); });
   nBody.appendChild(nTa);
+
+  // Staleness notice: if there's a saved narrative that was auto-generated and
+  // the fields have since changed, the text may be out of date.
+  if (F.narrative && F._narrGen && F.narrative === F._narrGen) {
+    var freshNow = generateNarrative();
+    if (freshNow !== F.narrative) {
+      const stale = document.createElement('div');
+      stale.style.cssText = 'background:#fff3cd;border:1px solid #e0c86a;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12.5px;color:#7a5c00;line-height:1.4';
+      stale.textContent = '\u26a0 The report data has changed since this narrative was generated. Tap "Generate from Fields" to update it.';
+      nBody.insertBefore(stale, nTa);
+    }
+  }
 
   const genBtn = document.createElement('button');
   genBtn.textContent = '✨ Generate from Fields';
   genBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif;margin-right:8px';
   genBtn.addEventListener('click', () => {
     const text = generateNarrative();
-    F.narrative = text; saveForm();
+    F.narrative = text; F._narrGen = text; F._narrManual = false; saveForm();
     nTa.value = text;
+    renderTab();
   });
   nBody.appendChild(genBtn);
-
-  const aiBtn = document.createElement('button');
-  aiBtn.textContent = '🤖 Polish with AI';
-  aiBtn.style.cssText = 'background:#2d6a2d;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif;margin-right:8px';
-  aiBtn.addEventListener('click', () => polishNarrativeWithAI(nTa, aiBtn, aiStatus));
-  nBody.appendChild(aiBtn);
 
   const clrBtn = document.createElement('button');
   clrBtn.textContent = '✕ Clear';
@@ -3019,82 +3171,11 @@ function tabRemarks() {
   clrBtn.addEventListener('click', () => { F.narrative=''; saveForm(); nTa.value=''; });
   nBody.appendChild(clrBtn);
 
-  const aiStatus = document.createElement('div');
-  aiStatus.style.cssText = 'font-size:12px;color:#888;margin-top:10px;line-height:1.4';
-  aiStatus.textContent = '"Generate from Fields" works offline. "Polish with AI" rewrites it to read more naturally (needs an internet connection).';
-  nBody.appendChild(aiStatus);
-
   nCard.appendChild(nTitle);
   nCard.appendChild(nBody);
   wrap.appendChild(nCard);
 
   return wrap;
-}
-
-// ── Option B: rewrite the narrative naturally via the Claude API ──
-async function polishNarrativeWithAI(textarea, btn, statusEl) {
-  // Start from existing text, or generate from fields if empty
-  var base = (F.narrative && F.narrative.trim()) ? F.narrative.trim() : generateNarrative();
-  if (!base || base.length < 10) {
-    statusEl.textContent = 'Fill in some incident details first, then try again.';
-    statusEl.style.color = '#8b0000';
-    return;
-  }
-
-  var origLabel = btn.textContent;
-  btn.textContent = '⏳ Polishing…';
-  btn.disabled = true;
-  statusEl.style.color = '#888';
-  statusEl.textContent = 'Contacting AI to rewrite the narrative…';
-
-  // Build a compact facts block so the model stays accurate to the data
-  var facts = [];
-  if (F.date) facts.push('Date: ' + F.date);
-  if (F.disp) facts.push('Dispatched: ' + F.disp);
-  if (F.inQ) facts.push('In quarters: ' + F.inQ);
-  var nt = effVal(F.nerisType, F.nerisTypeOther); if (nt) facts.push('Incident type: ' + nt);
-  if (F.address) facts.push('Address: ' + F.address);
-  var lu = effVal(F.locationUse, F.locationUseOther); if (lu && lu!=='N/A') facts.push('Location/use: ' + lu);
-  if (F.responseMode) facts.push('Response mode: ' + F.responseMode);
-  var ac = effVal(F.arrivalCond, F.arrivalCondOther); if (ac) facts.push('On arrival: ' + ac);
-
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: "You are helping a volunteer fire department write the narrative section of an official incident run report. "
-            + "Rewrite the draft below into a clear, professional, natural-sounding incident narrative in past tense, third person, using standard fire-service terminology. "
-            + "Keep every fact exactly as given — do not invent times, names, actions, or outcomes, and do not add anything not present. "
-            + "Use flowing prose (no bullet points, no headings), 1-2 short paragraphs. Return ONLY the narrative text with no preamble.\n\n"
-            + "KEY FACTS:\n" + facts.join('\n') + "\n\nDRAFT NARRATIVE:\n" + base
-        }]
-      })
-    });
-    const data = await response.json();
-    var out = '';
-    if (data && Array.isArray(data.content)) {
-      out = data.content.filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
-    }
-    if (out) {
-      F.narrative = out; saveForm();
-      textarea.value = out;
-      statusEl.style.color = '#2d6a2d';
-      statusEl.textContent = '✓ Rewritten. Review and edit as needed — verify all facts before filing.';
-    } else {
-      throw new Error('Empty response');
-    }
-  } catch (err) {
-    statusEl.style.color = '#8b0000';
-    statusEl.textContent = '✗ Could not reach the AI (check your internet connection). The "Generate from Fields" version still works offline.';
-  } finally {
-    btn.textContent = origLabel;
-    btn.disabled = false;
-  }
 }
 
 // Builds the Personnel Injured card (used on the Personnel tab)
