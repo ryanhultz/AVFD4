@@ -378,6 +378,30 @@ async function loadPersonnel() {
 
 const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","Other"];
 
+// Officer ranks for the incident commander
+const IC_RANKS = ["Chief","Assistant Chief","2nd Assistant Chief","Captain","Lieutenant","Firefighter"];
+
+// Receiving hospitals within ~60 miles of Cayuga, NY (emergency departments),
+// ordered roughly by distance from Aurelius.
+const HOSPITALS = [
+  "Auburn Community Hospital — Auburn (~5 mi)",
+  "Cayuga Medical Center — Ithaca (~30 mi)",
+  "Geneva General Hospital — Geneva (~25 mi)",
+  "Upstate Community Hospital — Syracuse (~30 mi)",
+  "Crouse Hospital — Syracuse (~33 mi)",
+  "Upstate University Hospital — Syracuse (~33 mi)",
+  "Guthrie Cortland Medical Center — Cortland (~40 mi)",
+  "Newark-Wayne Community Hospital — Newark (~35 mi)",
+  "Clifton Springs Hospital — Clifton Springs (~30 mi)",
+  "Fulton Medical Center — Fulton (~40 mi)",
+  "Central Square Medical Center — Central Square (~45 mi)",
+  "Oswego Hospital — Oswego (~50 mi)",
+  "Strong Memorial Hospital — Rochester (~60 mi)",
+  "Rochester General Hospital — Rochester (~60 mi)",
+  "Not Transported",
+  "Other",
+];
+
 // ── Dispatch narrative dropdown options ──────────────────
 // ── NERIS incident taxonomy (7 core categories → subtypes) ──
 // Replaced the retired NFIRS codes (NFIRS sunset Feb 2026; NERIS is now the
@@ -385,26 +409,170 @@ const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","Other"];
 // no numeric codes — matches how NERIS itself is structured.
 const NERIS_CATEGORIES = [
   { code:"FIRE", label:"Fire", subtypes:[
-    "Structure Fire — structural involvement","Structure Fire — confined","Cooking Fire (confined)","Chimney Fire",
-    "Vehicle Fire — passenger","Vehicle Fire — electric (EV)","Vehicle Fire — heavy/commercial",
-    "Wildland/Brush/Grass Fire","Outside/Rubbish/Dumpster Fire","Mobile Home/Manufactured Fire","Other Fire"] },
+    // Structure
+    {c:"FIRE||STRUCTURE_FIRE||STRUCTURAL_INVOLVEMENT_FIRE", l:"Structure — Structural Involvement Fire"},
+    {c:"FIRE||STRUCTURE_FIRE||ROOM_AND_CONTENTS_FIRE", l:"Structure — Room and Contents Fire"},
+    {c:"FIRE||STRUCTURE_FIRE||CONFINED_COOKING_APPLIANCE_FIRE", l:"Structure — Confined Cooking Appliance Fire"},
+    {c:"FIRE||STRUCTURE_FIRE||CHIMNEY_FIRE", l:"Structure — Chimney Fire"},
+    // Transportation
+    {c:"FIRE||TRANSPORTATION_FIRE||VEHICLE_FIRE_PASSENGER", l:"Vehicle Fire — Passenger"},
+    {c:"FIRE||TRANSPORTATION_FIRE||VEHICLE_FIRE_COMMERCIAL", l:"Vehicle Fire — Commercial"},
+    {c:"FIRE||TRANSPORTATION_FIRE||VEHICLE_FIRE_RV", l:"Vehicle Fire — RV"},
+    {c:"FIRE||TRANSPORTATION_FIRE||VEHICLE_FIRE_FOOD_TRUCK", l:"Vehicle Fire — Food Truck"},
+    {c:"FIRE||TRANSPORTATION_FIRE||POWERED_MOBILITY_DEVICE_FIRE", l:"Powered Mobility Device Fire"},
+    {c:"FIRE||TRANSPORTATION_FIRE||TRAIN_RAIL_FIRE", l:"Train/Rail Fire"},
+    {c:"FIRE||TRANSPORTATION_FIRE||BOAT_PERSONAL_WATERCRAFT_BARGE_FIRE", l:"Boat/Watercraft/Barge Fire"},
+    {c:"FIRE||TRANSPORTATION_FIRE||AIRCRAFT_FIRE", l:"Aircraft Fire"},
+    // Outside
+    {c:"FIRE||OUTSIDE_FIRE||VEGETATION_GRASS_FIRE", l:"Outside — Vegetation/Grass Fire"},
+    {c:"FIRE||OUTSIDE_FIRE||WILDFIRE_WILDLAND", l:"Outside — Wildfire/Wildland"},
+    {c:"FIRE||OUTSIDE_FIRE||WILDFIRE_URBAN_INTERFACE", l:"Outside — Wildfire Urban Interface"},
+    {c:"FIRE||OUTSIDE_FIRE||TRASH_RUBBISH_FIRE", l:"Outside — Trash/Rubbish Fire"},
+    {c:"FIRE||OUTSIDE_FIRE||DUMPSTER_OUTDOOR_CONTAINER_FIRE", l:"Outside — Dumpster/Container Fire"},
+    {c:"FIRE||OUTSIDE_FIRE||CONSTRUCTION_WASTE", l:"Outside — Construction Waste Fire"},
+    {c:"FIRE||OUTSIDE_FIRE||OUTSIDE_TANK_FIRE", l:"Outside — Tank Fire"},
+    {c:"FIRE||OUTSIDE_FIRE||UTILITY_INFRASTRUCTURE_FIRE", l:"Outside — Utility/Infrastructure Fire"},
+    {c:"FIRE||OUTSIDE_FIRE||OTHER_OUTSIDE_FIRE", l:"Other Outside Fire"},
+    // Special
+    {c:"FIRE||SPECIAL_FIRE||ESS_FIRE", l:"Special — Energy Storage System Fire"},
+    {c:"FIRE||SPECIAL_FIRE||EXPLOSION", l:"Special — Explosion"},
+    {c:"FIRE||SPECIAL_FIRE||INFRASTRUCTURE_FIRE", l:"Special — Infrastructure Fire"}] },
+
   { code:"MEDICAL", label:"Medical", subtypes:[
-    "Cardiac Arrest","Stroke/CVA","Respiratory Distress","Chest Pain/Cardiac","Diabetic/Other Illness",
-    "Traumatic Injury (fall, assault)","MVC with Injury","Overdose/Poisoning","Other Medical"] },
+    // Illness
+    {c:"MEDICAL||ILLNESS||CARDIAC_ARREST", l:"Illness — Cardiac Arrest"},
+    {c:"MEDICAL||ILLNESS||HEART_PROBLEMS", l:"Illness — Heart Problems"},
+    {c:"MEDICAL||ILLNESS||CHEST_PAIN_NON_TRAUMA", l:"Illness — Chest Pain (Non-Trauma)"},
+    {c:"MEDICAL||ILLNESS||BREATHING_PROBLEMS", l:"Illness — Breathing Problems"},
+    {c:"MEDICAL||ILLNESS||STROKE_CVA", l:"Illness — Stroke/CVA"},
+    {c:"MEDICAL||ILLNESS||UNCONSCIOUS_VICTIM", l:"Illness — Unconscious Victim"},
+    {c:"MEDICAL||ILLNESS||ALTERED_MENTAL_STATUS", l:"Illness — Altered Mental Status"},
+    {c:"MEDICAL||ILLNESS||CONVULSIONS_SEIZURES", l:"Illness — Convulsions/Seizures"},
+    {c:"MEDICAL||ILLNESS||DIABETIC_PROBLEMS", l:"Illness — Diabetic Problems"},
+    {c:"MEDICAL||ILLNESS||OVERDOSE", l:"Illness — Overdose"},
+    {c:"MEDICAL||ILLNESS||ALLERGIC_REACTION_STINGS", l:"Illness — Allergic Reaction/Stings"},
+    {c:"MEDICAL||ILLNESS||ABDOMINAL_PAIN", l:"Illness — Abdominal Pain"},
+    {c:"MEDICAL||ILLNESS||BACK_PAIN_NON_TRAUMA", l:"Illness — Back Pain (Non-Trauma)"},
+    {c:"MEDICAL||ILLNESS||HEADACHE", l:"Illness — Headache"},
+    {c:"MEDICAL||ILLNESS||NAUSEA_VOMITING", l:"Illness — Nausea/Vomiting"},
+    {c:"MEDICAL||ILLNESS||PSYCHOLOGICAL_BEHAVIOR_ISSUES", l:"Illness — Psychological/Behavioral"},
+    {c:"MEDICAL||ILLNESS||PREGNANCY_CHILDBIRTH", l:"Illness — Pregnancy/Childbirth"},
+    {c:"MEDICAL||ILLNESS||SICK_CASE", l:"Illness — Sick Case"},
+    {c:"MEDICAL||ILLNESS||WELL_PERSON_CHECK", l:"Illness — Well Person Check"},
+    {c:"MEDICAL||ILLNESS||PANDEMIC_EPIDEMIC_OUTBREAK", l:"Illness — Pandemic/Epidemic Outbreak"},
+    {c:"MEDICAL||ILLNESS||UNKNOWN_PROBLEM", l:"Illness — Unknown Problem"},
+    {c:"MEDICAL||ILLNESS||NO_APPROPRIATE_CHOICE", l:"Illness — No Appropriate Choice"},
+    // Injury
+    {c:"MEDICAL||INJURY||MOTOR_VEHICLE_COLLISION", l:"Injury — Motor Vehicle Collision"},
+    {c:"MEDICAL||INJURY||FALL", l:"Injury — Fall"},
+    {c:"MEDICAL||INJURY||ASSAULT", l:"Injury — Assault"},
+    {c:"MEDICAL||INJURY||HEMORRHAGE_LACERATION", l:"Injury — Hemorrhage/Laceration"},
+    {c:"MEDICAL||INJURY||BURNS_EXPLOSION", l:"Injury — Burns/Explosion"},
+    {c:"MEDICAL||INJURY||CARBON_MONOXIDE_OTHER_INHALATION_INJURY", l:"Injury — CO/Inhalation Injury"},
+    {c:"MEDICAL||INJURY||CHOKING", l:"Injury — Choking"},
+    {c:"MEDICAL||INJURY||POISONING", l:"Injury — Poisoning"},
+    {c:"MEDICAL||INJURY||ELECTROCUTION", l:"Injury — Electrocution"},
+    {c:"MEDICAL||INJURY||HEAT_COLD_EXPOSURE", l:"Injury — Heat/Cold Exposure"},
+    {c:"MEDICAL||INJURY||DROWNING_DIVING_SCUBA_ACCIDENT", l:"Injury — Drowning/Diving Accident"},
+    {c:"MEDICAL||INJURY||ANIMAL_BITES", l:"Injury — Animal Bites"},
+    {c:"MEDICAL||INJURY||EYE_TRAUMA", l:"Injury — Eye Trauma"},
+    {c:"MEDICAL||INJURY||GUNSHOT_WOUND", l:"Injury — Gunshot Wound"},
+    {c:"MEDICAL||INJURY||STAB_PENETRATING_TRAUMA", l:"Injury — Stab/Penetrating Trauma"},
+    {c:"MEDICAL||INJURY||INDUSTRIAL_INACCESSIBLE_ENTRAPMENT", l:"Injury — Industrial/Inaccessible Entrapment"},
+    {c:"MEDICAL||INJURY||OTHER_TRAUMATIC_INJURY", l:"Injury — Other Traumatic Injury"},
+    // Other
+    {c:"MEDICAL||OTHER||MEDICAL_ALARM", l:"Other — Medical Alarm"},
+    {c:"MEDICAL||OTHER||STANDBY_REQUEST", l:"Other — Standby Request"},
+    {c:"MEDICAL||OTHER||INTERCEPT_OTHER_UNIT", l:"Other — Intercept Other Unit"},
+    {c:"MEDICAL||OTHER||AIRMEDICAL_TRANSPORT", l:"Other — Airmedical Transport"},
+    {c:"MEDICAL||OTHER||TRANSFER_INTERFACILITY", l:"Other — Transfer/Interfacility"},
+    {c:"MEDICAL||OTHER||HEALTHCARE_PROFESSIONAL_ADMISSION", l:"Other — Healthcare Professional Admission"},
+    {c:"MEDICAL||OTHER||COMMUNITY_PUBLIC_HEALTH", l:"Other — Community/Public Health"}] },
+
   { code:"HAZSIT", label:"Hazardous Situation", subtypes:[
-    "Gas Leak (natural/LP)","Fuel/Oil Spill","Hazmat Release","Carbon Monoxide (confirmed)",
-    "Electrical Hazard/Wires Down","MVC — no injuries","Smoke Investigation (no fire)","Gas Odor (unconfirmed)","Other Hazard"] },
+    // Non-chemical
+    {c:"HAZSIT||HAZARD_NONCHEM||ELEC_POWER_LINE_DOWN_ARCHING_MALFUNC", l:"Power Line Down/Arcing/Malfunction"},
+    {c:"HAZSIT||HAZARD_NONCHEM||ELEC_HAZARD_SHORT_CIRCUIT", l:"Electrical Hazard/Short Circuit"},
+    {c:"HAZSIT||HAZARD_NONCHEM||MOTOR_VEHICLE_COLLISION", l:"Motor Vehicle Collision (No Injuries)"},
+    {c:"HAZSIT||HAZARD_NONCHEM||BOMB_THREAT_RESPONSE_SUSPICIOUS_PACKAGE", l:"Bomb Threat/Suspicious Package"},
+    // Hazmat
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||GAS_LEAK_ODOR", l:"Hazmat — Gas Leak/Odor"},
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||FUEL_SPILL_ODOR", l:"Hazmat — Fuel Spill/Odor"},
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||CARBON_MONOXIDE_RELEASE", l:"Hazmat — Carbon Monoxide Release"},
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||HAZMAT_RELEASE_FACILITY", l:"Hazmat — Release, Facility"},
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||HAZMAT_RELEASE_TRANSPORT", l:"Hazmat — Release, Transport"},
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||BIOLOGICAL_RELEASE_INCIDENT", l:"Hazmat — Biological Release"},
+    {c:"HAZSIT||HAZARDOUS_MATERIALS||RADIOACTIVE_RELEASE_INCIDENT", l:"Hazmat — Radioactive Release"},
+    // Overpressure
+    {c:"HAZSIT||OVERPRESSURE||NO_RUPTURE", l:"Overpressure — No Rupture"},
+    {c:"HAZSIT||OVERPRESSURE||RUPTURE_WITHOUT_FIRE", l:"Overpressure — Rupture Without Fire"},
+    // Investigation
+    {c:"HAZSIT||INVESTIGATION||SMOKE_INVESTIGATION", l:"Investigation — Smoke"},
+    {c:"HAZSIT||INVESTIGATION||ODOR", l:"Investigation — Odor"}] },
+
   { code:"RESCUE", label:"Rescue", subtypes:[
-    "MVC with Entrapment/Extrication","Water/Ice Rescue","Confined Space Rescue","High Angle/Rope Rescue",
-    "Structural Collapse","Industrial/Machinery Entrapment","Other Rescue"] },
-  { code:"PUBLIC_SERVICE", label:"Public Service", subtypes:[
-    "Lift Assist (no transport)","Smoke Alarm Activation (no fire)","CO Alarm (no CO found)","Fire Alarm Activation",
-    "Welfare Check/Person in Distress","Lost/Missing Person","Weather/Storm Damage","Water Problem/Flooding",
-    "Public Assist/Service Call","Other Public Service"] },
-  { code:"NO_EMERGENCY", label:"No Emergency", subtypes:[
-    "Cancelled En Route","False Alarm — accidental","False Alarm — malicious","Good Intent","Wrong Location","Other"] },
-  { code:"LAW", label:"Law Enforcement Assist", subtypes:[
-    "Law Enforcement Assist"] },
+    // Transportation
+    {c:"RESCUE||TRANSPORTATION||MOTOR_VEHICLE_EXTRICATION_ENTRAPPED", l:"Motor Vehicle Extrication/Entrapped"},
+    {c:"RESCUE||TRANSPORTATION||AVIATION_COLLISION_CRASH", l:"Aviation Collision/Crash"},
+    {c:"RESCUE||TRANSPORTATION||AVIATION_STANDBY", l:"Aviation Standby"},
+    {c:"RESCUE||TRANSPORTATION||TRAIN_RAIL_COLLISION_DERAILMENT", l:"Train/Rail Collision/Derailment"},
+    // Structure
+    {c:"RESCUE||STRUCTURE||EXTRICATION_ENTRAPPED", l:"Structure — Extrication/Entrapped"},
+    {c:"RESCUE||STRUCTURE||BUILDING_STRUCTURE_COLLAPSE", l:"Structure — Building/Structure Collapse"},
+    {c:"RESCUE||STRUCTURE||ELEVATOR_ESCALATOR_RESCUE", l:"Structure — Elevator/Escalator Rescue"},
+    {c:"RESCUE||STRUCTURE||CONFINED_SPACE_RESCUE", l:"Structure — Confined Space Rescue"},
+    // Outside
+    {c:"RESCUE||OUTSIDE||EXTRICATION_ENTRAPPED", l:"Outside — Extrication/Entrapped"},
+    {c:"RESCUE||OUTSIDE||CONFINED_SPACE_RESCUE", l:"Outside — Confined Space Rescue"},
+    {c:"RESCUE||OUTSIDE||HIGH_ANGLE_RESCUE", l:"Outside — High Angle Rescue"},
+    {c:"RESCUE||OUTSIDE||LOW_ANGLE_RESCUE", l:"Outside — Low Angle Rescue"},
+    {c:"RESCUE||OUTSIDE||STEEP_ANGLE_RESCUE", l:"Outside — Steep Angle Rescue"},
+    {c:"RESCUE||OUTSIDE||TRENCH", l:"Outside — Trench Rescue"},
+    {c:"RESCUE||OUTSIDE||BACKCOUNTRY_RESCUE", l:"Outside — Backcountry Rescue"},
+    {c:"RESCUE||OUTSIDE||LIMITED_NO_ACCESS", l:"Outside — Limited/No Access"},
+    // Water
+    {c:"RESCUE||WATER||PERSON_IN_WATER_STANDING", l:"Water — Person in Water (Standing)"},
+    {c:"RESCUE||WATER||PERSON_IN_WATER_SWIFTWATER", l:"Water — Person in Water (Swiftwater)"},
+    {c:"RESCUE||WATER||WATERCRAFT_IN_DISTRESS", l:"Water — Watercraft in Distress"}] },
+
+  { code:"PUBSERV", label:"Public Service", subtypes:[
+    // Alarms (non-medical)
+    {c:"PUBSERV||ALARMS_NONMED||FIRE_ALARM", l:"Alarm — Fire Alarm"},
+    {c:"PUBSERV||ALARMS_NONMED||CO_ALARM", l:"Alarm — CO Alarm"},
+    {c:"PUBSERV||ALARMS_NONMED||GAS_ALARM", l:"Alarm — Gas Alarm"},
+    {c:"PUBSERV||ALARMS_NONMED||OTHER_ALARM", l:"Alarm — Other Alarm"},
+    // Citizen assist
+    {c:"PUBSERV||CITIZEN_ASSIST||LIFT_ASSIST", l:"Citizen Assist — Lift Assist"},
+    {c:"PUBSERV||CITIZEN_ASSIST||CITIZEN_ASSIST_SERVICE_CALL", l:"Citizen Assist — Service Call"},
+    {c:"PUBSERV||CITIZEN_ASSIST||PERSON_IN_DISTRESS", l:"Citizen Assist — Person in Distress"},
+    {c:"PUBSERV||CITIZEN_ASSIST||LOST_PERSON", l:"Citizen Assist — Lost Person"},
+    // Disaster / weather
+    {c:"PUBSERV||DISASTER_WEATHER||WEATHER_RESPONSE", l:"Weather Response"},
+    {c:"PUBSERV||DISASTER_WEATHER||DAMAGE_ASSESSMENT", l:"Damage Assessment"},
+    // Other
+    {c:"PUBSERV||OTHER||STANDBY", l:"Other — Standby"},
+    {c:"PUBSERV||OTHER||MOVE_UP", l:"Other — Move Up"},
+    {c:"PUBSERV||OTHER||DAMAGED_HYDRANT", l:"Other — Damaged Hydrant"}] },
+
+  { code:"NOEMERG", label:"No Emergency", subtypes:[
+    {c:"NOEMERG||CANCELLED", l:"Cancelled"},
+    // False alarm
+    {c:"NOEMERG||FALSE_ALARM||ACCIDENTAL_ALARM", l:"False Alarm — Accidental"},
+    {c:"NOEMERG||FALSE_ALARM||MALFUNCTIONING_ALARM", l:"False Alarm — Malfunctioning"},
+    {c:"NOEMERG||FALSE_ALARM||INTENTIONAL_FALSE_ALARM", l:"False Alarm — Intentional"},
+    {c:"NOEMERG||FALSE_ALARM||BOMB_SCARE", l:"False Alarm — Bomb Scare"},
+    {c:"NOEMERG||FALSE_ALARM||OTHER_FALSE_CALL", l:"False Alarm — Other False Call"},
+    // Good intent
+    {c:"NOEMERG||GOOD_INTENT||NO_INCIDENT_FOUND_LOCATION_ERROR", l:"Good Intent — No Incident Found/Location Error"},
+    {c:"NOEMERG||GOOD_INTENT||SMOKE_FROM_NONHOSTILE_SOURCE", l:"Good Intent — Smoke from Non-Hostile Source"},
+    {c:"NOEMERG||GOOD_INTENT||CONTROLLED_BURNING_AUTHORIZED", l:"Good Intent — Controlled Burning (Authorized)"},
+    {c:"NOEMERG||GOOD_INTENT||INVESTIGATE_HAZARDOUS_RELEASE", l:"Good Intent — Investigate Hazardous Release"}] },
+
+  { code:"LAWENFORCE", label:"Law Enforcement", subtypes:[
+    {c:"LAWENFORCE", l:"Law Enforcement Assist"}] },
+
+  { code:"UNDETERMINED", label:"Undetermined", subtypes:[
+    {c:"UNDETERMINED", l:"Undetermined"}] },
 ];
 // NERIS location/use types (replaces old property-occupancy list)
 const LOCATION_USE_TYPES = ["Residential — single family","Residential — multi family","Commercial/Business","Industrial/Manufacturing","Assembly/Institutional","Educational/School","Healthcare","Storage/Warehouse","Agricultural/Farm","Vehicle","Roadway/Highway","Outdoor/Open Land","Vacant/Abandoned","Other","N/A"];
@@ -451,24 +619,79 @@ const NERIS_TACTICS = [
   { cat:"No Action", actions:[
     "No Action Required"] },
 ];
+
+// Suggested actions by NERIS category — used to auto-expand the relevant
+// tactic categories and outline the likely actions. These are HINTS ONLY;
+// nothing is auto-checked (NERIS requires coding what was actually done).
+const TACTIC_SUGGESTIONS = {
+  FIRE: [
+    "Command & Control: Establish Incident Command",
+    "Command & Control: Incident Assessment (360 Completed)",
+    "Suppression: Structural Fire Suppression — Interior",
+    "Suppression: Fire Control/Extinguishment",
+    "Ventilation: Ventilation Performed",
+    "Search — Structure: Primary Search",
+    "Search — Structure: Secondary Search",
+    "Salvage & Overhaul: Overhaul",
+    "Salvage & Overhaul: Salvage / Property Conservation"
+  ],
+  MEDICAL: [
+    "Command & Control: Establish Incident Command",
+    "Emergency Medical Care: Patient Assessment",
+    "Emergency Medical Care: Provide Basic Life Support",
+    "Emergency Medical Care: Provide Transport"
+  ],
+  HAZSIT: [
+    "Command & Control: Establish Incident Command",
+    "Hazardous Situation Mitigation: Remove Hazard",
+    "Hazardous Situation Mitigation: Leak Stop",
+    "Hazardous Situation Mitigation: Spill Control",
+    "Services: Control Traffic",
+    "Evacuation: Nearby Buildings"
+  ],
+  RESCUE: [
+    "Command & Control: Establish Incident Command",
+    "Command & Control: Safety Officer Assigned",
+    "Emergency Medical Care: Patient Assessment",
+    "Emergency Medical Care: Provide Basic Life Support",
+    "Services: Control Traffic",
+    "Equipment: Provide Special Equipment"
+  ],
+  PUBSERV: [
+    "Command & Control: Establish Incident Command",
+    "Services: Assist Uninjured Person",
+    "Services: Shut Down Alarm",
+    "Services: Restore/Reset Alarm System",
+    "Services: Secure Property"
+  ],
+  NOEMERG: [
+    "No Action: No Action Required",
+    "Information / Enforcement: Provide Public Information"
+  ],
+  LAWENFORCE: [
+    "Command & Control: Notify Other Agencies",
+    "Services: Control Traffic",
+    "Information / Enforcement: Refer to Proper AHJ"
+  ]
+};
 const WATER_SUPPLY = ["N/A","Hydrant","Tanker Shuttle","Draft/Static Source","Booster Tank Only","Mutual Aid Tankers"];
 const DISPOSITIONS = ["Fire Extinguished","Fire Controlled","Out on Arrival","Patient Transported","Patient Refused","Turned Over to Owner","Turned Over to PD","Turned Over to Other Agency","Investigation Pending","False Alarm","No Incident Found","Cancelled"];
 const CAUSES = ["Undetermined","Under Investigation","Accidental","Electrical","Cooking","Heating Equipment","Smoking","Open Flame","Vehicle/Mechanical","Intentional","Natural (lightning/weather)","N/A"];
 
 const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
-const TABS = ["Incident","Times","Dispatch","Apparatus","Personnel","MVC","EMS","Law","Narrative","Finalize"];
+const TABS = ["Dispatch","Times","Incident","Apparatus","Personnel","MVC","EMS","Law","Narrative","Finalize"];
 
 const EMPTY = {
-  date:"", runNum:"", ic:"",
-  disp:"", enroute:"", arrived:"", clear:"", inQ:"",
+  date:"", runNum:"", ic:"", icRank:"",
+  disp:"", clear:"", inQ:"",
   dispActual:"", address:"",
-  nerisCat:"", nerisType:"", nerisTypeOther:"", locationUse:"", locationUseOther:"", responseMode:"", arrivalCond:"", arrivalCondOther:"", actionsTaken:[], waterSupply:"", disposition:"", cause:"", narrative:"",
+  nerisCat:"", nerisType:"", nerisTypeOther:"", nerisCode:"", locationUse:"", locationUseOther:"", responseMode:"", arrivalCond:"", arrivalCondOther:"", actionsTaken:[], waterSupply:"", disposition:"", cause:"", narrative:"",
   mvcVehicles:"", mvcExtrication:"", mvcEntrapped:"", mvcHazards:[],
-  apparatus:{}, apparatusDriver:{}, personnel:{},
+  apparatus:{}, apparatusDriver:{}, apparatusEnroute:{}, apparatusArrived:{}, personnel:{},
   emtCt:"", intCt:"", totalCt:"",
   injName:"", injNum:"", rptFiled:"",
   numPatients:"",
-  amb:[{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""}],
+  amb:[{svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""},{svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""},{svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""}],
   refusedPcr:["","",""],
   law:["","",""],
   cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
@@ -502,10 +725,11 @@ function loadForm() {
 
   // amb: old format had {svc,custom,als} → now {svc,custom,pcr}
   if (!Array.isArray(data.amb)) data.amb = [];
-  while (data.amb.length < 3) data.amb.push({svc:"",custom:"",pcr:""});
+  while (data.amb.length < 3) data.amb.push({svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""});
   data.amb = data.amb.map(a => ({
     svc: a.svc||"", custom: a.custom||"",
-    pcr: a.pcr || a.als || ""  // migrate als→pcr if needed
+    pcr: a.pcr || a.als || "",  // migrate als→pcr if needed
+    hospital: a.hospital||"", hospitalOther: a.hospitalOther||""
   }));
 
   // refusedPcr: ensure array
@@ -520,11 +744,17 @@ function loadForm() {
   if (typeof data.apparatus !== 'object' || Array.isArray(data.apparatus)) data.apparatus = {};
   if (typeof data.personnel !== 'object' || Array.isArray(data.personnel)) data.personnel = {};
   if (typeof data.apparatusDriver !== 'object' || Array.isArray(data.apparatusDriver)) data.apparatusDriver = {};
+  if (typeof data.apparatusEnroute !== 'object' || Array.isArray(data.apparatusEnroute)) data.apparatusEnroute = {};
+  if (typeof data.apparatusArrived !== 'object' || Array.isArray(data.apparatusArrived)) data.apparatusArrived = {};
+  // Enroute/Arrived are now tracked per apparatus — drop the old department-wide fields
+  delete data.enroute; delete data.arrived;
 
   // narrative fields: ensure present (added in later version)
   if (typeof data.nerisCat !== 'string') data.nerisCat = '';
   if (typeof data.nerisType !== 'string') data.nerisType = '';
   if (typeof data.nerisTypeOther !== 'string') data.nerisTypeOther = '';
+  if (typeof data.nerisCode !== 'string') data.nerisCode = '';
+  if (typeof data.icRank !== 'string') data.icRank = '';
   if (typeof data.locationUseOther !== 'string') data.locationUseOther = '';
   if (typeof data.arrivalCondOther !== 'string') data.arrivalCondOther = '';
   if (typeof data.locationUse !== 'string') data.locationUse = '';
@@ -534,7 +764,7 @@ function loadForm() {
   delete data.nfirsType; delete data.propertyType;
   delete data.dispType; delete data.dispDetail;
   delete data.locCode;
-  delete data._openTactic;
+  delete data._openTactic; delete data._openTactics;
   if (typeof data.responseMode !== 'string') data.responseMode = '';
   if (typeof data.arrivalCond !== 'string') data.arrivalCond = '';
   if (!Array.isArray(data.actionsTaken)) data.actionsTaken = [];
@@ -577,11 +807,11 @@ function markOnScene(badge) {
 // Build a fresh empty report object
 function blankReport() {
   return Object.assign({}, EMPTY, {
-    amb:[{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""},{svc:"",custom:"",pcr:""}],
+    amb:[{svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""},{svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""},{svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""}],
     refusedPcr:["","",""],
     law:["","",""],
     cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
-    apparatus:{}, apparatusDriver:{}, personnel:{}, mutual:[],
+    apparatus:{}, apparatusDriver:{}, apparatusEnroute:{}, apparatusArrived:{}, personnel:{}, mutual:[],
   });
 }
 
@@ -603,7 +833,7 @@ function reportHasData() {
   if (F.runNum || F.date || F.ic || F.address || F.remarks) return true;
   if (Object.keys(F.personnel||{}).length) return true;
   if (Object.keys(F.apparatus||{}).length) return true;
-  if (F.disp || F.enroute || F.arrived) return true;
+  if (F.disp || F.clear || F.inQ) return true;
   return false;
 }
 
@@ -863,7 +1093,7 @@ function ambRow(i, renderFn) {
     wrap.appendChild(ci);
   }
 
-  // PCR # for this ambulance (only shown once a service is selected)
+  // PCR # + destination (only shown once a service is selected)
   if (a.svc) {
     const pcrLbl = document.createElement('div');
     pcrLbl.className = 'lbl';
@@ -875,7 +1105,37 @@ function ambRow(i, renderFn) {
       saveForm();
       if (renderFn) renderFn();
     }, {placeholder:'PCR number…'});
+    pcrInp.style.marginBottom = '8px';
     wrap.appendChild(pcrInp);
+
+    // Transported to — receiving hospital
+    const hospLbl = document.createElement('div');
+    hospLbl.className = 'lbl';
+    hospLbl.textContent = 'Transported To';
+    hospLbl.style.marginBottom = '4px';
+    wrap.appendChild(hospLbl);
+    const hospOpts = [["","— Select Hospital —"], ...HOSPITALS.map(h=>[h,h])];
+    const hospSel = sel(a.hospital || '', hospOpts, v => {
+      F.amb[i].hospital = v;
+      if (v !== 'Other') F.amb[i].hospitalOther = '';
+      saveForm();
+      if (renderFn) renderFn();
+    }, {marginBottom: a.hospital === 'Other' ? '8px' : '0'});
+    wrap.appendChild(hospSel);
+
+    // Free text when "Other"
+    if (a.hospital === 'Other') {
+      const hoLbl = document.createElement('div');
+      hoLbl.className = 'lbl';
+      hoLbl.textContent = 'Enter Hospital Name';
+      hoLbl.style.marginBottom = '4px';
+      wrap.appendChild(hoLbl);
+      const hoInp = stableInp(a.hospitalOther || '', v => {
+        F.amb[i].hospitalOther = v;
+        saveForm();
+      }, {placeholder:'Hospital name…'});
+      wrap.appendChild(hoInp);
+    }
   }
 
   return wrap;
@@ -1025,13 +1285,20 @@ function tabIncident() {
     return el;
   }
 
-  // ── Incident Info card ──────────────────────────────────
-  const infoCard = card('Incident Info',
-    field('Date',                dateInp(F.date,       v=>{F.date=v;      saveForm();updateHeader();}), 10),
-    field('Incident Number',     textInp(F.runNum,     v=>{F.runNum=v;    saveForm();updateHeader();}, 'e.g. 25-0142'), 10),
-    field('Incident Commander',  persDropdown(F.ic,    v=>{F.ic=v; markOnScene(v); saveForm();}), 0)
+  // ── Date / Incident Number card ─────────────────────────
+  const infoCard = card('Date / Incident Number',
+    field('Date',            dateInp(F.date,   v=>{F.date=v;   saveForm();updateHeader();}), 10),
+    field('Incident Number', textInp(F.runNum, v=>{F.runNum=v; saveForm();updateHeader();}, 'e.g. 25-0142'), 0)
   );
   wrap.appendChild(infoCard);
+
+  // ── Incident Command card ───────────────────────────────
+  const icRankOpts = [["","— Select Rank —"], ...IC_RANKS.map(r=>[r,r])];
+  const cmdCard = card('Incident Command',
+    field('Incident Commander', persDropdown(F.ic, v=>{F.ic=v; markOnScene(v); saveForm();}), 10),
+    field('Rank', sel(F.icRank||'', icRankOpts, v=>{F.icRank=v; saveForm();}), 0)
+  );
+  wrap.appendChild(cmdCard);
 
   // ── Address card ─────────────────────────────────────────
   const addrInp = textInp(F.address, v=>{F.address=v;saveForm();}, 'Street address…');
@@ -1287,11 +1554,14 @@ function tabTimes() {
   note.textContent = 'Enter time as HHMM (e.g. 0405 → 04:05). Elapsed time shown in green.';
   body.appendChild(note);
 
-  body.appendChild(makeTimeField('Dispatched',  'disp',    null));
-  body.appendChild(makeTimeField('Enroute',     'enroute', 'disp'));
-  body.appendChild(makeTimeField('Arrived',     'arrived', 'enroute'));
-  body.appendChild(makeTimeField('Cleared',     'clear',   'arrived'));
-  body.appendChild(makeTimeField('In Quarters', 'inQ',     'clear'));
+  body.appendChild(makeTimeField('Dispatched',  'disp',  null));
+  body.appendChild(makeTimeField('Cleared',     'clear', 'disp'));
+  body.appendChild(makeTimeField('In Quarters', 'inQ',   'clear'));
+
+  const perNote = document.createElement('div');
+  perNote.style.cssText = 'font-size:11px;color:#888;margin-top:6px;line-height:1.4';
+  perNote.textContent = 'Enroute and arrival times are recorded per unit on the Apparatus tab.';
+  body.appendChild(perNote);
 
   const c = document.createElement('div');
   c.className = 'card';
@@ -1315,7 +1585,24 @@ function tabTimes() {
     return h > 0 ? `${h}h ${m}m` : `${m} min`;
   }
 
+  // Earliest apparatus arrival = first unit on scene
+  function firstArrival() {
+    var best = null;
+    var arr = F.apparatusArrived || {};
+    for (var k in arr) {
+      if (!F.apparatus[k]) continue;
+      var m = parseMin(arr[k]);
+      if (m === null) continue;
+      if (best === null || m < best) best = m;
+    }
+    return best;
+  }
+  var fa = firstArrival();
+  var faStr = null;
+  if (fa !== null) { var fh2=Math.floor(fa/60), fm2=fa%60; faStr = String(fh2).padStart(2,'0')+':'+String(fm2).padStart(2,'0'); }
+
   const segments = [
+    ['Response Time (Dispatch → First Unit On Scene)', F.disp, faStr],
     ['Total Call Time (Dispatch → In Quarters)', F.disp, F.inQ],
   ];
 
@@ -1353,19 +1640,214 @@ function tabTimes() {
   return wrap;
 }
 
+// ── Dispatch email parser ────────────────────────────────
+// Tuned for the Cayuga County CAD email format (labeled header fields +
+// "Unit RunTimes" table). Falls back to looser patterns for other formats.
+// Returns {field: value} for whatever it recognizes — nothing is guessed.
+
+// Aurelius CAD unit codes → apparatus names in this app.
+// Aurelius units are prefixed AUR in the CAD feed.
+const CAD_UNIT_MAP = {
+  "AURCHF": "Chief's Vehicle",
+  "AUREN1": "Engine 1",
+  "AUREN2": "Engine 2",
+  "AURRE1": "Rescue 1",
+  "AURRE2": "Rescue 2",
+  "AURRP1": "Rescue 2",
+  "AURQU1": "Quint 1",
+  "AURSQ1": "Squad 1",
+  "AURSQ2": "Squad 2",
+  "AURSQ3": "Squad 3",
+  "AURTA1": "Tanker 1",
+  "AURTK1": "Tanker 1",
+};
+
+function parseDispatchText(text) {
+  const out = {};
+  if (!text || !text.trim()) return out;
+  const t = text.replace(/\r/g, '');
+
+  function fld(name) {
+    var re = new RegExp('^\\s*' + name + '\\s*:\\s*(.+)$', 'im');
+    var m = t.match(re);
+    return m ? m[1].trim() : '';
+  }
+
+  // ── Incident # — prefer the Aurelius one (26AU-####) from the list ──
+  var incLine = fld('Incident #');
+  if (incLine) {
+    var au = incLine.match(/\b(\d{2}AU-\d+)\b/i);
+    out.runNum = au ? au[1] : incLine.split(',')[0].trim();
+  }
+  if (!out.runNum) {
+    var mNum = t.match(/(?:incident|call|run|event|cfs|inc)\s*(?:number|no\.?|#)?\s*[:#]\s*([A-Za-z0-9][A-Za-z0-9\-\/]{2,20})/i);
+    if (mNum) out.runNum = mNum[1].trim();
+  }
+
+  // ── Address (+ township) ──
+  var addr = fld('Address');
+  var twp  = fld('Township');
+  if (addr) out.address = twp ? (addr + ', ' + twp) : addr;
+  if (!out.address) {
+    var mAddr = t.match(/(?:location|addr|incident\s+location)\s*[:#]\s*(.+)/i);
+    if (mAddr) out.address = mAddr[1].split(/\s{2,}|\|/)[0].trim().replace(/[,;]\s*$/, '');
+  }
+
+  // ── Date + dispatch time from "Date/Time Reported: 18:39:42 07/13/26" ──
+  var rep = fld('Date\\/Time Reported');
+  if (rep) {
+    var mR = rep.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s+(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (mR) {
+      out.disp = String(mR[1]).padStart(2,'0') + ':' + mR[2];
+      var yy = mR[5].length === 2 ? '20' + mR[5] : mR[5];
+      out.date = yy + '-' + String(mR[3]).padStart(2,'0') + '-' + String(mR[4]).padStart(2,'0');
+    }
+  }
+  if (!out.date) {
+    var mISO = t.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+    var mUS  = t.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2}|\d{2})\b/);
+    if (mISO) out.date = mISO[1]+'-'+mISO[2]+'-'+mISO[3];
+    else if (mUS) {
+      var y2 = mUS[3].length === 2 ? '20'+mUS[3] : mUS[3];
+      out.date = y2+'-'+String(mUS[1]).padStart(2,'0')+'-'+String(mUS[2]).padStart(2,'0');
+    }
+  }
+  if (!out.disp) {
+    var mT = t.match(/(?:dispatch(?:ed)?|alarm|toned|received)\s*(?:time)?\s*[:#]?\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+    if (mT) {
+      var h = parseInt(mT[1],10), mn = parseInt(mT[2],10), ap = (mT[3]||'').toUpperCase();
+      if (ap === 'PM' && h < 12) h += 12;
+      if (ap === 'AM' && h === 12) h = 0;
+      if (h <= 23 && mn <= 59) out.disp = String(h).padStart(2,'0')+':'+String(mn).padStart(2,'0');
+    }
+  }
+
+  // ── Dispatch narrative text: Nature + description + comments ──
+  var nature = fld('Nature');
+  var natDesc = fld('Nature Description');
+  // Some formats use "Type:" instead of "Nature:" (ignore the CAD's terse "Type: f")
+  if (!nature) { var ty = fld('Type'); if (ty && ty.length > 2) nature = ty; }
+  var bits = [];
+  if (nature) bits.push(nature);
+  if (natDesc) bits.push(natDesc);
+  var mCom = t.match(/\n[ \t]*Comments:[ \t]*([\s\S]*?)(?:\n[ \t]*={5,}|\n[ \t]*Unit RunTimes:|$)/);
+  if (mCom) {
+    var comTxt = mCom[1]
+      // drop "13/07/26 18:39:57 Seamans C:" operator/timestamp lines
+      .replace(/\d{2}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2}\s+[^\n]*?:\s*/g, '')
+      .split('\n').map(function(l){return l.trim();}).filter(Boolean).join(' / ');
+    if (comTxt) bits.push(comTxt);
+  }
+  if (bits.length) out._dispText = bits.join(' — ');
+
+  // ── NERIS category from Nature (falls back to whole-text keywords) ──
+  var natLow = (nature + ' ' + natDesc).toLowerCase();
+  // If there was no Nature field, scan the whole text instead
+  var scan = natLow.trim() ? natLow : t.toLowerCase();
+  if (/fire-?\s*structure|structure fire|building fire|house fire|working fire/.test(scan)) out._cat = 'FIRE';
+  else if (/fire-?\s*vehicle|vehicle fire|car fire|truck fire/.test(scan)) out._cat = 'FIRE';
+  else if (/fire-?\s*(brush|grass|wildland|outside|rubbish)|brush fire|grass fire/.test(scan)) out._cat = 'FIRE';
+  else if (/fire-?\s*chimney|chimney fire/.test(scan)) out._cat = 'FIRE';
+  else if (/entrap|extricat|pin-?in|pinned/.test(scan)) out._cat = 'RESCUE';
+  else if (/\bmva\b|\bmvc\b|motor vehicle|car accident/.test(scan)) out._cat = 'MEDICAL';
+  else if (/cardiac|chest pain|stroke|breathing|unresponsive|unconscious|seizure|overdose|\bems\b|medical|sick person|\bfall\b|injur/.test(scan)) out._cat = 'MEDICAL';
+  else if (/gas leak|odor of gas|fuel spill|hazmat|carbon monoxide|wires down|power line|electrical hazard/.test(scan)) out._cat = 'HAZSIT';
+  else if (/alarm|lift assist|service call/.test(scan)) out._cat = 'PUBSERV';
+  else if (/cancel|false alarm|good intent/.test(scan)) out._cat = 'NOEMERG';
+
+  // ── Per-unit times from the "Unit RunTimes" table ──
+  // e.g. "AURTA1 ENRT    18:54:32 07/13/26    FLEM4 ..."
+  var units = {};
+  var reUnit = /^\s*([A-Z0-9]{3,8})\s+(DISP|ENRT|ARRVD|COMP|OK)\s+(\d{2}):(\d{2}):\d{2}\s/gm;
+  var m2;
+  while ((m2 = reUnit.exec(t)) !== null) {
+    var code = m2[1].toUpperCase();
+    var app = CAD_UNIT_MAP[code];
+    if (!app) continue;
+    var hhmm = m2[3] + ':' + m2[4];
+    if (!units[app]) units[app] = {};
+    if (m2[2] === 'ENRT' && !units[app].enroute) units[app].enroute = hhmm;
+    if (m2[2] === 'ARRVD' && !units[app].arrived) units[app].arrived = hhmm;
+    if (m2[2] === 'DISP') units[app].dispatched = true;
+  }
+  if (Object.keys(units).length) out._units = units;
+
+  return out;
+}
+
 function tabDispatch() {
   const wrap = document.createElement('div');
 
-  // ── Actual Dispatch Text (standalone) ────────────────────
+  // ── Actual Dispatch Text (standalone, with auto-fill) ────
   const dtBody = document.createElement('div');
+
+  const dtHelp = document.createElement('div');
+  dtHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:8px;line-height:1.4';
+  dtHelp.textContent = 'Paste the dispatch email or text here, then tap Auto-Fill to pull out the incident number, address, date, and time.';
+  dtBody.appendChild(dtHelp);
+
   const ta = document.createElement('textarea');
   ta.className = 'ta';
-  ta.rows = 3;
-  ta.placeholder = 'Enter the actual dispatch text received from the 911 center…';
+  ta.rows = 5;
+  ta.placeholder = 'Paste the dispatch email / text here…';
   ta.value = F.dispActual || '';
-  Object.assign(ta.style, { fontSize:'14px', lineHeight:'1.4' });
+  Object.assign(ta.style, { fontSize:'14px', lineHeight:'1.4', marginBottom:'8px' });
   ta.addEventListener('input', e => { F.dispActual = e.target.value; saveForm(); });
   dtBody.appendChild(ta);
+
+  const fillStatus = document.createElement('div');
+  fillStatus.style.cssText = 'font-size:12px;color:#888;margin-top:8px;line-height:1.5';
+
+  const fillBtn = document.createElement('button');
+  fillBtn.textContent = '⚡ Auto-Fill from Text';
+  fillBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif';
+  fillBtn.addEventListener('click', () => {
+    const got = parseDispatchText(ta.value);
+    const filled = [];
+    if (got.runNum && !F.runNum) { F.runNum = got.runNum; filled.push('Incident # ' + got.runNum); }
+    if (got.date && !F.date)     { F.date = got.date;     filled.push('Date ' + got.date); }
+    if (got.disp && !F.disp)     { F.disp = got.disp;     filled.push('Dispatch time ' + got.disp); }
+    if (got.address && !F.address) { F.address = got.address; filled.push('Address ' + got.address); }
+    if (got._cat && !F.nerisCat) {
+      F.nerisCat = got._cat;
+      var cObj = NERIS_CATEGORIES.find(x => x.code === got._cat);
+      filled.push('Category ' + (cObj ? cObj.label : got._cat));
+    }
+
+    // Apparatus + per-unit enroute/arrival times
+    if (got._units) {
+      if (!F.apparatus) F.apparatus = {};
+      if (!F.apparatusEnroute) F.apparatusEnroute = {};
+      if (!F.apparatusArrived) F.apparatusArrived = {};
+      var unitNames = [];
+      Object.keys(got._units).forEach(function(app){
+        var u = got._units[app];
+        if (!F.apparatus[app]) { F.apparatus[app] = true; unitNames.push(app); }
+        if (u.enroute && !F.apparatusEnroute[app]) F.apparatusEnroute[app] = u.enroute;
+        if (u.arrived && !F.apparatusArrived[app]) F.apparatusArrived[app] = u.arrived;
+      });
+      if (unitNames.length) filled.push('Units ' + unitNames.join(', ') + ' (with times)');
+    }
+
+    if (filled.length) {
+      // Replace the raw CAD paste with the clean nature + comments
+      if (got._dispText) { F.dispActual = got._dispText; ta.value = got._dispText; }
+      saveForm();
+      updateHeader();
+      fillStatus.style.color = '#2d6a2d';
+      fillStatus.textContent = '✓ Filled: ' + filled.join(' · ') + '. Review everything before filing.';
+      renderTab();
+    } else {
+      const anyFound = got.runNum || got.date || got.disp || got.address || got._cat || got._units;
+      fillStatus.style.color = '#8b0000';
+      fillStatus.textContent = anyFound
+        ? 'Nothing added — those fields are already filled in. Clear a field first to re-fill it.'
+        : 'Couldn\u2019t recognize anything in that text. Fill the fields in manually.';
+    }
+  });
+  dtBody.appendChild(fillBtn);
+  dtBody.appendChild(fillStatus);
+
   wrap.appendChild(card('Actual Dispatch Text', dtBody));
 
   function optList(arr){ return [["","— Select —"], ...arr.map(x=>[x,x])]; }
@@ -1388,7 +1870,10 @@ function tabDispatch() {
     b.style.cssText = 'padding:11px 8px;border-radius:8px;font-size:13px;font-weight:700;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
       + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#8b0000');
     b.addEventListener('click', () => {
-      if (F.nerisCat !== cat.code) { F.nerisCat = cat.code; F.nerisType = ''; }
+      if (F.nerisCat !== cat.code) {
+        F.nerisCat = cat.code; F.nerisType = ''; F.nerisTypeOther = ''; F.nerisCode = '';
+        F._openTactics = {}; // let the new type's suggested tactics expand
+      }
       saveForm(); renderTab();
     });
     catGrid.appendChild(b);
@@ -1399,10 +1884,26 @@ function tabDispatch() {
   if (F.nerisCat) {
     const catObj = NERIS_CATEGORIES.find(x => x.code === F.nerisCat);
     if (catObj) {
+      // Options are [label, label] so F.nerisType stays a readable label;
+      // the true NERIS code is stored alongside in F.nerisCode.
+      const subOpts = [["","— Select —"], ...catObj.subtypes.map(s => [s.l, s.l])];
       niBody.appendChild(fieldWithOther('Incident Type — ' + catObj.label,
-        F.nerisType||'', optList(catObj.subtypes),
-        v=>{F.nerisType=v;saveForm();},
+        F.nerisType||'', subOpts,
+        v=>{
+          F.nerisType = v;
+          var hit = catObj.subtypes.find(s => s.l === v);
+          F.nerisCode = hit ? hit.c : '';
+          saveForm();
+        },
         F.nerisTypeOther||'', v=>{F.nerisTypeOther=v;saveForm();}));
+
+      // Show the official NERIS code for the selection
+      if (F.nerisCode) {
+        const codeLine = document.createElement('div');
+        codeLine.style.cssText = 'font-size:10px;color:#888;font-family:monospace;margin-top:-4px;word-break:break-all';
+        codeLine.textContent = F.nerisCode;
+        niBody.appendChild(codeLine);
+      }
     }
   }
   wrap.appendChild(card('Incident Type (NERIS)', niBody));
@@ -1424,15 +1925,34 @@ function tabDispatch() {
   const actBody = document.createElement('div');
   if (!Array.isArray(F.actionsTaken)) F.actionsTaken = [];
 
+  // Suggested actions for the selected incident category (hints only)
+  const suggested = TACTIC_SUGGESTIONS[F.nerisCat] || [];
+  const suggestedCats = {};
+  suggested.forEach(function(k){
+    var i = k.indexOf(': ');
+    if (i > 0) suggestedCats[k.slice(0,i)] = true;
+  });
+
+  // Which categories are expanded: manual toggles override, otherwise
+  // suggested categories start open once an incident type is chosen.
+  if (!F._openTactics || typeof F._openTactics !== 'object' || Array.isArray(F._openTactics)) F._openTactics = {};
+  function isOpen(cat) {
+    if (Object.prototype.hasOwnProperty.call(F._openTactics, cat)) return !!F._openTactics[cat];
+    return !!suggestedCats[cat];
+  }
+
   const actHelp = document.createElement('div');
   actHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:10px;line-height:1.4';
-  actHelp.textContent = 'Tap a tactic to expand it, then check the specific actions taken (NERIS).';
+  actHelp.textContent = suggested.length
+    ? 'Tactics likely for this incident type are expanded, and suggested actions are outlined. Nothing is pre-checked — tap the actions your crews actually performed.'
+    : 'Tap a tactic to expand it, then check the specific actions taken (NERIS).';
   actBody.appendChild(actHelp);
 
   for (const t of NERIS_TACTICS) {
     // how many actions in this category are selected
     const selCount = t.actions.filter(a => F.actionsTaken.includes(t.cat + ': ' + a)).length;
-    const open = F._openTactic === t.cat;
+    const open = isOpen(t.cat);
+    const isSuggestedCat = !!suggestedCats[t.cat];
 
     // Category header button
     const catBtn = document.createElement('button');
@@ -1440,16 +1960,27 @@ function tabDispatch() {
       + (open ? '0' : '6px') + ';border-radius:' + (open ? '8px 8px 0 0' : '8px')
       + ';font-size:13.5px;font-weight:700;font-family:Georgia,serif;cursor:pointer;'
       + 'display:flex;justify-content:space-between;align-items:center;border:1.5px solid '
-      + (selCount ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff8f0;color:#8b0000');
+      + (selCount ? '#8b0000;background:#8b0000;color:#fff'
+                  : (isSuggestedCat ? '#8b0000;background:#fdf3f3;color:#8b0000'
+                                    : '#c8a97a;background:#fff8f0;color:#8b0000'));
     const catLabel = document.createElement('span');
     catLabel.textContent = t.cat + (selCount ? '  (' + selCount + ')' : '');
+    const catRight = document.createElement('span');
+    catRight.style.cssText = 'display:flex;align-items:center;gap:8px';
+    if (isSuggestedCat && !selCount) {
+      const sugTag = document.createElement('span');
+      sugTag.textContent = 'suggested';
+      sugTag.style.cssText = 'font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;opacity:.75';
+      catRight.appendChild(sugTag);
+    }
     const catArrow = document.createElement('span');
     catArrow.textContent = open ? '\u25be' : '\u25b8';
     catArrow.style.opacity = '0.7';
+    catRight.appendChild(catArrow);
     catBtn.appendChild(catLabel);
-    catBtn.appendChild(catArrow);
+    catBtn.appendChild(catRight);
     catBtn.addEventListener('click', () => {
-      F._openTactic = open ? '' : t.cat;
+      F._openTactics[t.cat] = !open;
       renderTab();
     });
     actBody.appendChild(catBtn);
@@ -1462,10 +1993,14 @@ function tabDispatch() {
       for (const a of t.actions) {
         const key = t.cat + ': ' + a;
         const on = F.actionsTaken.includes(key);
+        const isSug = suggested.indexOf(key) >= 0;
         const chip = document.createElement('button');
         chip.textContent = (on ? '\u2713 ' : '') + a;
-        chip.style.cssText = 'padding:7px 11px;border-radius:16px;font-size:12px;font-family:Georgia,serif;cursor:pointer;border:1.5px solid '
-          + (on ? '#8b0000;background:#8b0000;color:#fff' : '#c8a97a;background:#fff;color:#5a3000');
+        var chipStyle = 'padding:7px 11px;border-radius:16px;font-size:12px;font-family:Georgia,serif;cursor:pointer;border:1.5px ';
+        if (on) chipStyle += 'solid #8b0000;background:#8b0000;color:#fff';
+        else if (isSug) chipStyle += 'dashed #8b0000;background:#fdf3f3;color:#8b0000;font-weight:600';
+        else chipStyle += 'solid #c8a97a;background:#fff;color:#5a3000';
+        chip.style.cssText = chipStyle;
         chip.addEventListener('click', () => {
           if (F.actionsTaken.includes(key)) F.actionsTaken = F.actionsTaken.filter(x => x !== key);
           else F.actionsTaken.push(key);
@@ -1500,7 +2035,13 @@ function generateNarrative() {
   function fmtDur2(t1,t2){
     function pm(t){if(!t)return null;var p=t.split(':');var h=parseInt(p[0]||0),m=parseInt(p[1]||0);return isNaN(h)||isNaN(m)?null:h*60+m;}
     var a=pm(t1),b=pm(t2); if(a===null||b===null)return null; var d=b-a; if(d<0)d+=1440;
-    var h=Math.floor(d/60),mn=d%60; return h>0?h+"h "+mn+"m":mn+" min";
+    var h=Math.floor(d/60),mn=d%60;
+    var words=['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+    function w(n){ return n<=12 ? words[n] : String(n); }
+    if (h===0) return mn + (mn===1?' minute':' minutes');
+    var hs = w(h) + (h===1?' hour':' hours');
+    if (mn===0) return hs;
+    return hs + ' and ' + mn + (mn===1?' minute':' minutes');
   }
 
   // Deterministic pick: same report → same wording (seeded by incident #).
@@ -1514,7 +2055,18 @@ function generateNarrative() {
   const selPers = PERSONNEL.filter(p=>F.personnel[p.badge]);
   const totalPers = parseInt(F.totalCt)||selPers.length;
   const mutArr = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
-  const ambArr = (F.amb||[]).filter(a=>a.svc).map(a=>a.svc==='Other'?(a.custom||'Other'):a.svc);
+  const ambArr = (F.amb||[]).filter(a=>a.svc).map(function(a){
+    var n = a.svc==='Other' ? (a.custom||'Other') : a.svc;
+    // Title-case all-caps service names so they read naturally ("THROOP" → "Throop")
+    if (n === n.toUpperCase()) {
+      n = n.toLowerCase().replace(/\b[a-z]/g, function(ch){ return ch.toUpperCase(); });
+    }
+    // Identify it as an ambulance, unless the name already says so
+    if (!/\b(ambulance|ems|medic|rescue squad|air ?med|lifenet|helicopter)\b/i.test(n)) {
+      n += ' Ambulance';
+    }
+    return n;
+  });
   var nerisTypeEff = effVal(F.nerisType, F.nerisTypeOther);
   var locationUseEff = effVal(F.locationUse, F.locationUseOther);
   var arrivalEff = effVal(F.arrivalCond, F.arrivalCondOther);
@@ -1530,8 +2082,41 @@ function generateNarrative() {
     if (rm.indexOf('emergency')>=0 && rm.indexOf('non')<0) s1 += ' emergency';
     else if (rm.indexOf('non')>=0) s1 += ' non-emergency';
   }
-  s1 += ' ' + pick(['to a reported','for a reported','to a']) + ' ' + (nerisTypeEff ? nerisTypeEff.toLowerCase() : 'incident');
-  if (F.address) s1 += ' at ' + F.address;
+  // Humanize the incident type: expand abbreviations, tidy separators
+  var typeText = 'incident';
+  if (nerisTypeEff) {
+    // Labels look like "Structure — Structural Involvement Fire" or
+    // "Injury — Motor Vehicle Collision". The part after the dash is the
+    // specific type and reads best on its own.
+    var t = nerisTypeEff;
+    var dash = t.indexOf(' — ');
+    if (dash > 0) {
+      var head = t.slice(0, dash);
+      var tail = t.slice(dash + 3);
+      // Keep the head when the tail alone wouldn't make sense on its own
+      // ("Vehicle Fire — RV" → "RV vehicle fire"; "False Alarm — Accidental"
+      // → "accidental false alarm"). Otherwise the tail is self-describing.
+      if (/fire$|alarm$|investigation$|overpressure$/i.test(head)) {
+        // don't double a word the tail already ends with ("CO Alarm" + "Alarm")
+        if (tail.toLowerCase().endsWith(head.toLowerCase())) t = tail;
+        else t = tail + ' ' + head;
+      }
+      else t = tail;
+    }
+    typeText = t.toLowerCase()
+      .replace(/\bmvc\b/g, 'motor vehicle collision')
+      .replace(/\bco\b/g, 'carbon monoxide')
+      .replace(/\bess\b/g, 'energy storage system')
+      .replace(/\bcva\b/g, 'stroke')
+      .replace(/\brv\b/g, 'RV')
+      // collapse an accidental doubled word ("...alarm alarm" → "...alarm")
+      .replace(/\b(\w+)\s+\1\b/gi, '$1');
+  }
+  // Correct a/an for the chosen lead-in
+  var lead = pick(['to a reported','for a reported','to a']);
+  if (/^[aeiou]/i.test(typeText)) lead = lead.replace(/\ba$/,'an');
+  s1 += ' ' + lead + ' ' + typeText;
+  if (F.address && F.address.trim()) s1 += ' at ' + F.address.trim();
   if (locationUseEff && locationUseEff!=='N/A') {
     var luw = locationUseEff.toLowerCase();
     if (luw === 'residential — single family') luw = 'single-family residence';
@@ -1552,21 +2137,45 @@ function generateNarrative() {
       s2 += 'Units ' + respVerb;
     }
     if (totalPers) s2 += ' with ' + totalPers + ' personnel';
-    if (icName) s2 += ', ' + pick(['under the command of','with command established by','under']) + ' ' + icName + (icP?(' (#'+icP.badge+')'):'');
+    if (icName) {
+      var icTitle = F.icRank ? F.icRank + ' ' + icName : icName;
+      s2 += ', ' + pick(['under the command of','with command established by','under']) + ' ' + icTitle + (icP?(' (#'+icP.badge+')'):'');
+    }
     s2 += '.';
     s.push(s2);
   }
 
   // ── Sentence 3 — arrival (+ patient count) ──
+  // earliest apparatus arrival = first unit on scene
+  var firstArr = null;
+  (function(){
+    var arr = F.apparatusArrived || {};
+    for (var k in arr) {
+      if (!F.apparatus[k]) continue;
+      var t = arr[k];
+      if (!t) continue;
+      var p = t.split(':'); var mm = parseInt(p[0]||0)*60 + parseInt(p[1]||0);
+      if (isNaN(mm)) continue;
+      if (firstArr === null || mm < firstArr.m) firstArr = { m: mm, s: t };
+    }
+  })();
+
   var patientPhrase = '';
   if (F.numPatients && F.numPatients !== '0' && F.numPatients !== '') {
     patientPhrase = F.numPatients === '6+' ? '6 or more patients'
       : (F.numPatients === '1' ? 'one patient' : F.numPatients + ' patients');
   }
   if (arrivalEff) {
-    var arrOpen = pick(['On arrival, crews found','Upon arrival, units encountered','First-arriving crews found','Crews arrived to find']);
     var arrLow = arrivalEff.toLowerCase();
-    var s3 = arrOpen + ' ' + arrLow;
+    var s3;
+    if (firstArr) {
+      // "The first unit arrived at HH:MM hours to find working fire"
+      s3 = pick(['The first unit arrived at','First-arriving units reached the scene at','The first company arrived at'])
+        + ' ' + firstArr.s + ' hours ' + pick(['to find','and found']) + ' ' + arrLow;
+    } else {
+      s3 = pick(['On arrival, crews found','Upon arrival, units encountered','First-arriving crews found','Crews arrived to find'])
+        + ' ' + arrLow;
+    }
     if (patientPhrase) {
       // avoid doubling "on scene" if the arrival condition already says it
       s3 += /on scene|patient/.test(arrLow) ? ' (' + patientPhrase + ')' : ' with ' + patientPhrase + ' on scene';
@@ -1643,23 +2252,62 @@ function generateNarrative() {
     else s.push('Mutual aid was coordinated with ' + joinList(mutArr) + '.');
   }
 
+  // ── Law enforcement on scene ──
+  var lawArr = (F.law||[]).filter(function(l){ return l && l.trim(); }).map(function(l){
+    var p = l.split('||');
+    var agency = (p[0]||'').trim();
+    var officer = (p[1]||'').trim();
+    return { agency: agency, officer: officer };
+  }).filter(function(x){ return x.agency; });
+
+  if (lawArr.length) {
+    // Group officers under each agency so one agency isn't repeated
+    var byAgency = [];
+    lawArr.forEach(function(x){
+      var found = null;
+      for (var i=0;i<byAgency.length;i++) if (byAgency[i].agency===x.agency) { found = byAgency[i]; break; }
+      if (!found) { found = { agency: x.agency, officers: [] }; byAgency.push(found); }
+      if (x.officer) found.officers.push(x.officer);
+    });
+    var agencyPhrases = byAgency.map(function(g){
+      var t = g.agency;
+      if (g.officers.length === 1) t += ' (' + g.officers[0] + ')';
+      else if (g.officers.length > 1) t += ' (' + joinList(g.officers) + ')';
+      return t;
+    });
+    var lawVerb = byAgency.length > 1
+      ? pick(['were on scene','responded to the scene','were present on scene','also responded'])
+      : pick(['was on scene','responded to the scene','was present on scene','also responded']);
+    s.push(joinList(agencyPhrases) + ' ' + lawVerb + '.');
+  }
+
   // ── EMS / disposition (combined) ──
   var disp = F.disposition || '';
   var isPatientDisp = disp === 'Patient Transported' || disp === 'Patient Refused';
   var dispHandled = false;
 
+  // Receiving hospital(s) — strip the distance hint for the narrative
+  var hospArr = (F.amb||[]).filter(function(a){ return a.svc && a.hospital; }).map(function(a){
+    var h = a.hospital === 'Other' ? (a.hospitalOther || '') : a.hospital;
+    if (!h || h === 'Not Transported') return '';
+    return h.split(' — ')[0].trim();
+  }).filter(Boolean);
+  // de-dupe
+  hospArr = hospArr.filter(function(h,i){ return hospArr.indexOf(h) === i; });
+  var hospPhrase = hospArr.length ? ' to ' + joinList(hospArr) : '';
+
   if (ambArr.length) {
     if (disp === 'Patient Transported') {
-      s.push(pick(['Patient care was provided and the patient was transported by','The patient was treated and transported by','Care was rendered and transport provided by']) + ' ' + joinList(ambArr) + '.');
+      s.push(pick(['Patient care was provided and the patient was transported by','The patient was treated and transported by','Care was rendered and transport provided by']) + ' ' + joinList(ambArr) + hospPhrase + '.');
       dispHandled = true;
     } else if (disp === 'Patient Refused') {
       s.push('Patient care was provided by ' + joinList(ambArr) + ', but the patient refused transport.');
       dispHandled = true;
     } else {
-      s.push('Patient care and transport were handled by ' + joinList(ambArr) + '.');
+      s.push('Patient care and transport were handled by ' + joinList(ambArr) + hospPhrase + '.');
     }
   } else if (isPatientDisp) {
-    if (disp === 'Patient Transported') { s.push('The patient was transported.'); dispHandled = true; }
+    if (disp === 'Patient Transported') { s.push('The patient was transported' + hospPhrase + '.'); dispHandled = true; }
     else { s.push('The patient refused transport.'); dispHandled = true; }
   }
 
@@ -1714,12 +2362,18 @@ function tabApparatus() {
     const tog = toggle(a, isOn && F.apparatusDriver && F.apparatusDriver[a]
       ? 'Driver: ' + (PERSONNEL.find(p=>p.badge===(F.apparatusDriver||{})[a])||{name:''}).name
       : '', isOn, on => {
-      if (on) F.apparatus[a] = true; else { delete F.apparatus[a]; if (F.apparatusDriver) delete F.apparatusDriver[a]; }
+      if (on) F.apparatus[a] = true;
+      else {
+        delete F.apparatus[a];
+        if (F.apparatusDriver) delete F.apparatusDriver[a];
+        if (F.apparatusEnroute) delete F.apparatusEnroute[a];
+        if (F.apparatusArrived) delete F.apparatusArrived[a];
+      }
       saveForm(); renderTab();
     });
     itemWrap.appendChild(tog);
 
-    // If active, show driver dropdown
+    // If active, show driver dropdown + per-unit times
     if (isOn) {
       if (!F.apparatusDriver) F.apparatusDriver = {};
       const driverSel = sel(F.apparatusDriver[a]||'', persOpts, v => {
@@ -1732,6 +2386,63 @@ function tabApparatus() {
         if (sub) sub.textContent = v ? 'Driver: '+(PERSONNEL.find(p=>p.badge===v)||{name:''}).name : '';
       }, { marginTop:'6px', borderRadius:'6px', padding:'8px 10px', fontSize:'14px' });
       itemWrap.appendChild(driverSel);
+
+      // Per-unit Enroute / Arrived times
+      if (!F.apparatusEnroute) F.apparatusEnroute = {};
+      if (!F.apparatusArrived) F.apparatusArrived = {};
+
+      const timeRow = document.createElement('div');
+      timeRow.style.cssText = 'display:flex;gap:8px;margin-top:6px';
+
+      function unitTimeInput(store, label) {
+        const box = document.createElement('div');
+        box.style.cssText = 'flex:1';
+        const l = document.createElement('div');
+        l.className = 'lbl';
+        l.textContent = label;
+        l.style.cssText = 'font-size:10px;margin-bottom:3px';
+        box.appendChild(l);
+        const inp2 = document.createElement('input');
+        inp2.type = 'text';
+        inp2.inputMode = 'numeric';
+        inp2.className = 'inp';
+        inp2.placeholder = 'HH:MM';
+        inp2.value = (F[store] && F[store][a]) || '';
+        Object.assign(inp2.style, { padding:'8px 10px', fontSize:'15px', fontWeight:'600', textAlign:'center', letterSpacing:'0.05em' });
+        inp2.addEventListener('input', e => {
+          let v = e.target.value.replace(/[^0-9]/g,'');
+          if (v.length > 4) v = v.slice(0,4);
+          if (v.length >= 3) v = v.slice(0,2) + ':' + v.slice(2);
+          e.target.value = v;
+          if (!F[store]) F[store] = {};
+          F[store][a] = v;
+          saveForm();
+          updateUnitDiff();
+        });
+        box.appendChild(inp2);
+        return box;
+      }
+
+      const enrBox = unitTimeInput('apparatusEnroute', 'Enroute');
+      const arrBox = unitTimeInput('apparatusArrived', 'Arrived');
+
+      // elapsed badge: dispatch → this unit's arrival
+      const unitDiff = document.createElement('div');
+      unitDiff.style.cssText = 'min-width:56px;text-align:center;font-size:11px;font-weight:700;'
+        + 'background:#f5f5f5;border:1px solid #c8a97a;border-radius:6px;padding:4px 6px;color:#999;'
+        + 'align-self:flex-end;margin-bottom:1px';
+      function updateUnitDiff() {
+        const d = timeDiff(F.disp, (F.apparatusArrived||{})[a]);
+        unitDiff.textContent = d ? '+'+d : '—';
+        unitDiff.style.background = d ? '#d4edda' : '#f5f5f5';
+        unitDiff.style.color = d ? '#155724' : '#999';
+      }
+      updateUnitDiff();
+
+      timeRow.appendChild(enrBox);
+      timeRow.appendChild(arrBox);
+      timeRow.appendChild(unitDiff);
+      itemWrap.appendChild(timeRow);
     }
 
     wrap.appendChild(itemWrap);
@@ -2587,6 +3298,7 @@ function buildPrintHTML() {
   var totalPers = parseInt(F.totalCt)||selPers.length;
   var icPerson  = PERSONNEL.find(function(p){return p.badge===F.ic;});
   var icName    = icPerson?icPerson.name+" #"+icPerson.badge:(F.ic||"—");
+  if (F.icRank && icName !== "—") icName = F.icRank + " " + icName;
   var sigPerson = PERSONNEL.find(function(p){return p.badge===F.reportBy;});
   var sigName   = sigPerson?sigPerson.name+" #"+sigPerson.badge:"";
   var filledCars= F.cars.filter(function(c){return c.model||c.plate||c.color;});
@@ -2665,6 +3377,7 @@ function buildPrintHTML() {
   H+=shdr('Incident Information');
   var nerisTypeEffP = effVal(F.nerisType, F.nerisTypeOther);
   var nerisLbl = nerisTypeEffP ? (nerisCatLabel(F.nerisCat)+": "+nerisTypeEffP) : "—";
+  if (F.nerisCode) nerisLbl += '<div style="font-size:5.5pt;color:#777;font-family:monospace;word-break:break-all">'+F.nerisCode+'</div>';
   H+='<tr>'+lcell("28%","Incident Commander",icName)+lcell("28%","Incident Type (NERIS)",nerisLbl)
     +lcell("44%","Address",F.address||"—")+'</tr>';
   H+='<tr>'+lcell("33%","Response Mode",F.responseMode||"—")
@@ -2673,23 +3386,38 @@ function buildPrintHTML() {
   H+='</tbody></table>';
 
   // RESPONSE TIMES
+  // First unit on scene = earliest apparatus arrival
+  var firstArrMin = null;
+  (function(){
+    var arr = F.apparatusArrived || {};
+    for (var k in arr) {
+      if (!F.apparatus[k]) continue;
+      var m = parseMin(arr[k]);
+      if (m === null) continue;
+      if (firstArrMin === null || m < firstArrMin) firstArrMin = m;
+    }
+  })();
+  var firstArrStr = "—";
+  if (firstArrMin !== null) firstArrStr = String(Math.floor(firstArrMin/60)).padStart(2,'0')+':'+String(firstArrMin%60).padStart(2,'0');
+  var respMins = null;
+  if (tDisp !== null && firstArrMin !== null) { respMins = firstArrMin - tDisp; if (respMins < 0) respMins += 1440; }
+
   H+='<table style="margin-bottom:4px;border:1px solid #ccc"><tbody>';
   H+=shdr('Response Times');
   H+='<tr>';
-  [["Dispatched",F.disp,""],["Enroute",F.enroute,td(F.disp,F.enroute)],
-   ["Arrived",F.arrived,td(F.enroute,F.arrived)],["Cleared",F.clear,td(F.arrived,F.clear)],
-   ["In Quarters",F.inQ,td(F.clear,F.inQ)]].forEach(function(t){
-    H+='<td style="width:20%;text-align:center;padding:3px 4px;border:1px solid #ddd">'
+  [["Dispatched",F.disp,""],["First Unit On Scene",firstArrStr,respMins!==null?"+"+fmtDur(respMins):""],
+   ["Cleared",F.clear,""],["In Quarters",F.inQ,td(F.clear,F.inQ)]].forEach(function(t){
+    H+='<td style="width:25%;text-align:center;padding:3px 4px;border:1px solid #ddd">'
       +'<div style="font-size:5.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#666">'+t[0]+'</div>'
       +'<div style="font-size:13pt;font-weight:bold;line-height:1.1">'+(t[1]||"—")+'</div>'
       +'<div style="font-size:6pt;color:#555">'+t[2]+'&nbsp;</div></td>';
   });
   H+='</tr>';
   H+='<tr style="background:#f8f8f8">';
-  [["Total Call Time",callMins!==null?fmtDur(callMins):"—"],["Personnel",String(totalPers)],
-   ["Personnel Hours",persHours?persHours+" hrs":"—"],["EMTs",String(F.emtCt||autoEmt)],
-   ["Interior FF",String(F.intCt||autoInt)]].forEach(function(s){
-    H+='<td style="width:20%;text-align:center;padding:3px 4px;border:1px solid #ddd">'
+  [["Response Time",respMins!==null?fmtDur(respMins):"—"],["Total Call Time",callMins!==null?fmtDur(callMins):"—"],
+   ["Personnel",String(totalPers)],["Personnel Hours",persHours?persHours+" hrs":"—"],
+   ["EMTs",String(F.emtCt||autoEmt)],["Interior FF",String(F.intCt||autoInt)]].forEach(function(s){
+    H+='<td style="text-align:center;padding:3px 4px;border:1px solid #ddd">'
       +'<div style="font-size:5.5pt;font-weight:bold;text-transform:uppercase;letter-spacing:.05em;color:#666">'+s[0]+'</div>'
       +'<div style="font-size:9.5pt;font-weight:bold;line-height:1.1">'+s[1]+'</div></td>';
   });
@@ -2706,10 +3434,18 @@ function buildPrintHTML() {
   function appCol(list){
     if(!list.length) return '<table><tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7pt;color:#aaa">—</td></tr></table>';
     var s='<table>';
+    s+='<tr style="background:#f8f8f8"><th style="padding:1px 4px;border:1px solid #ddd;font-size:5.5pt;text-transform:uppercase;width:28%">Unit</th>'
+      +'<th style="padding:1px 4px;border:1px solid #ddd;font-size:5.5pt;text-transform:uppercase">Driver</th>'
+      +'<th style="padding:1px 4px;border:1px solid #ddd;font-size:5.5pt;text-transform:uppercase;width:16%">Enrt</th>'
+      +'<th style="padding:1px 4px;border:1px solid #ddd;font-size:5.5pt;text-transform:uppercase;width:16%">Arr</th></tr>';
     list.forEach(function(a){
       var dB=(F.apparatusDriver||{})[a],dP=dB?PERSONNEL.find(function(p){return p.badge===dB;}):null;
-      s+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;width:35%;background:#f9f9f9">'+a+'</td>'
-        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'+(dP?dP.name+" #"+dP.badge:"")+'</td></tr>';
+      var en=(F.apparatusEnroute||{})[a]||"—";
+      var ar=(F.apparatusArrived||{})[a]||"—";
+      s+='<tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;background:#f9f9f9">'+a+'</td>'
+        +'<td style="padding:2px 6px;border:1px solid #ddd;font-size:7.5pt">'+(dP?dP.name+" #"+dP.badge:"")+'</td>'
+        +'<td style="padding:2px 4px;border:1px solid #ddd;font-size:7pt;text-align:center">'+en+'</td>'
+        +'<td style="padding:2px 4px;border:1px solid #ddd;font-size:7pt;text-align:center">'+ar+'</td></tr>';
     });
     return s+'</table>';
   }
@@ -2760,11 +3496,15 @@ function buildPrintHTML() {
       H+='<td style="'+(usedLaw.length?"padding-left:4px":"")+'"><table style="border:1px solid #ccc"><tbody>'+shdr('EMS / Ambulances'+(F.numPatients?'  —  '+F.numPatients+' patient'+(F.numPatients==='1'?'':'s'):''))
         +'<tr style="background:#f8f8f8"><th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:22px">#</th>'
         +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt">Service</th>'
-        +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:30%">PCR #</th></tr>';
+        +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:22%">PCR #</th>'
+        +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:34%">Transported To</th></tr>';
       usedAmbs.forEach(function(a,i){
+        var hosp = a.hospital === 'Other' ? (a.hospitalOther||'') : (a.hospital||'');
+        if (hosp) hosp = hosp.split(' — ')[0];
         H+='<tr><td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;text-align:center">'+(i+1)+'</td>'
           +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(ambName(a)||"—")+'</td>'
-          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(a.pcr||"—")+'</td></tr>';
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(a.pcr||"—")+'</td>'
+          +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7pt">'+(hosp||"—")+'</td></tr>';
       });
       H+='</tbody></table>';
       if(usedRef.length) H+='<div style="font-size:7pt;padding:2px 5px;color:#555"><b>Refused PCR:</b> '+usedRef.join(", ")+'</div>';
@@ -2852,14 +3592,23 @@ function buildBlankFormHTML() {
     rosterRight+='<tr><td style="width:22px;text-align:center;padding:3px 4px;border:1px solid #ccc;font-size:7.5pt;font-weight:700">'+(i+1)+'</td><td style="padding:3px 8px;border:1px solid #ccc;font-size:8pt">'+chk+(p?p.name+' <span style="color:#666;font-size:7.5pt">#'+p.badge+(p.qual?' — '+p.qual:'')+'</span>':'')+'</td></tr>';
   }
 
-  var appGrid='';
-  for(var i=0;i<APPARATUS.length;i+=5){
-    appGrid+='<tr>';
-    for(var j=i;j<Math.min(i+5,APPARATUS.length);j++){
-      appGrid+='<td style="width:20%;border:1px solid #ccc;padding:5px 7px;font-size:8.5pt"><span style="display:inline-block;width:11px;height:11px;border:1.5px solid #555;border-radius:2px;vertical-align:middle;margin-right:4px"></span>'+APPARATUS[j]+'<div style="border-bottom:1px solid #999;margin-top:8px;font-size:7pt;color:#777">driver / badge</div></td>';
-    }
-    appGrid+='</tr>';
+  var appGrid='<thead><tr>'
+    +'<th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:26px">✓</th>'
+    +'<th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;text-align:left;width:22%">Unit</th>'
+    +'<th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;text-align:left">Driver / Badge</th>'
+    +'<th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:16%">Enroute</th>'
+    +'<th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:16%">Arrived</th>'
+    +'</tr></thead><tbody>';
+  for(var i=0;i<APPARATUS.length;i++){
+    appGrid+='<tr>'
+      +'<td style="border:1px solid #ccc;padding:4px;text-align:center"><span style="display:inline-block;width:11px;height:11px;border:1.5px solid #555;border-radius:2px"></span></td>'
+      +'<td style="border:1px solid #ccc;padding:4px 6px;font-size:8pt;font-weight:700">'+APPARATUS[i]+'</td>'
+      +'<td style="border:1px solid #ccc;padding:4px 6px">&nbsp;</td>'
+      +'<td style="border:1px solid #ccc;padding:4px 6px">&nbsp;</td>'
+      +'<td style="border:1px solid #ccc;padding:4px 6px">&nbsp;</td>'
+      +'</tr>';
   }
+  appGrid+='</tbody>';
 
   var S='*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:8.5pt;color:#000;background:white}@page{size:letter portrait;margin:0.35in 0.4in}table{border-collapse:collapse;width:100%}.pg{page-break-after:always}.pg:last-child{page-break-after:avoid}.sec{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.09em;border-bottom:1.5px solid #000;padding-bottom:2px;margin:10px 0 5px;page-break-after:avoid}.blk{page-break-inside:avoid}.fl{font-size:6.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:block;margin-top:5px;margin-bottom:2px}.ln{border-bottom:1px solid #888;display:block;min-height:20px}';
 
@@ -2874,8 +3623,9 @@ function buildBlankFormHTML() {
   html+=hdr('Incident Run Report — Page 1 of 3');
   html+='<div class="blk"><div class="sec">Incident Information</div>';
   html+='<table style="margin-bottom:8px"><tr>';
-  html+='<td style="width:35%;padding-right:10px"><span class="fl">Incident Commander</span><span class="ln"></span></td>';
-  html+='<td style="width:25%;padding-right:10px"><span class="fl">Location</span><span class="ln"></span></td>';
+  html+='<td style="width:28%;padding-right:10px"><span class="fl">Incident Commander</span><span class="ln"></span></td>';
+  html+='<td style="width:17%;padding-right:10px"><span class="fl">Rank</span><span class="ln"></span></td>';
+  html+='<td style="width:20%;padding-right:10px"><span class="fl">Location</span><span class="ln"></span></td>';
   html+='<td><span class="fl">Address</span><span class="ln"></span></td></tr></table></div>';
 
   html+='<div class="blk"><div class="sec">Dispatch</div>';
@@ -2886,17 +3636,18 @@ function buildBlankFormHTML() {
   html+='<td><span class="fl">Mutual Aid Agency</span><span class="ln"></span></td></tr></table></div>';
 
   html+='<div class="blk"><div class="sec">Response Times</div><table style="margin-bottom:8px"><tr>';
-  ['Dispatched','Enroute','Arrived','Cleared','In Quarters'].forEach(function(t){
-    html+='<td style="width:20%;text-align:center;border:1px solid #ccc;padding:5px 4px"><div style="font-size:6.5pt;font-weight:700;text-transform:uppercase">'+t+'</div><div style="border-bottom:1px solid #888;min-height:22px;margin-top:5px"></div></td>';
+  ['Dispatched','Cleared','In Quarters'].forEach(function(t){
+    html+='<td style="width:33%;text-align:center;border:1px solid #ccc;padding:5px 4px"><div style="font-size:6.5pt;font-weight:700;text-transform:uppercase">'+t+'</div><div style="border-bottom:1px solid #888;min-height:22px;margin-top:5px"></div></td>';
   });
   html+='</tr></table>';
+  html+='<div style="font-size:6.5pt;color:#555;margin-bottom:6px">Enroute and arrival times are recorded per unit in the Apparatus section below.</div>';
   html+='<table style="margin-bottom:8px"><tr>';
   ['TOTAL CALL TIME','TOTAL PERSONNEL','PERSONNEL HOURS','EMTs','INTERIOR FF'].forEach(function(l){
     html+='<td style="border:1px solid #ccc;padding:4px 8px;width:20%"><span style="font-size:6pt;font-weight:700;display:block">'+l+'</span><span style="font-size:9pt">&nbsp;</span></td>';
   });
   html+='</tr></table></div>';
 
-  html+='<div class="blk"><div class="sec">Apparatus Responding — check unit, write driver name and badge number</div>';
+  html+='<div class="blk"><div class="sec">Apparatus Responding — check unit, write driver name/badge and unit times</div>';
   html+='<table style="margin-bottom:8px">'+appGrid+'</table></div>';
 
   html+='<div class="blk"><div class="sec">Vehicles Involved</div>';
@@ -2909,8 +3660,8 @@ function buildBlankFormHTML() {
   html+='</div>';
 
   html+='<div class="blk"><div class="sec">EMS / Ambulances</div>';
-  html+='<table style="margin-bottom:4px"><thead><tr><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:22px">#</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee">Service</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:30%">PCR #</th></tr></thead><tbody>';
-  for(var n=1;n<=3;n++) html+='<tr><td style="padding:4px 6px;border:1px solid #ccc;font-weight:700;text-align:center">'+n+'</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td></tr>';
+  html+='<table style="margin-bottom:4px"><thead><tr><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:22px">#</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee">Service</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:22%">PCR #</th><th style="padding:3px 6px;border:1px solid #ccc;font-size:6.5pt;background:#eee;width:32%">Transported To</th></tr></thead><tbody>';
+  for(var n=1;n<=3;n++) html+='<tr><td style="padding:4px 6px;border:1px solid #ccc;font-weight:700;text-align:center">'+n+'</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td><td style="padding:4px 6px;border:1px solid #ccc">&nbsp;</td></tr>';
   html+='</tbody></table>';
   html+='<div style="font-size:8.5pt;margin-bottom:8px"><strong>Refused Transport PCR:</strong> <span style="display:inline-block;border-bottom:1px solid #888;width:220px;margin-left:8px;vertical-align:bottom"></span></div></div>';
 
