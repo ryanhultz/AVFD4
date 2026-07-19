@@ -1919,6 +1919,7 @@ function parseDispatchText(text) {
       if (!units[app]) units[app] = {};
       if (m2[2] === 'ENRT' && !units[app].enroute) units[app].enroute = hhmm;
       if (m2[2] === 'ARRVD' && !units[app].arrived) units[app].arrived = hhmm;
+      if (m2[2] === 'COMP' && !units[app].complete) units[app].complete = hhmm;
       if (m2[2] === 'DISP') units[app].dispatched = true;
       continue;
     }
@@ -1928,6 +1929,20 @@ function parseDispatchText(text) {
       if (code.indexOf(pfx) === 0) { otherDepts[CAD_DEPT_MAP[pfx]] = true; break; }
     }
   }
+
+  // Cleared time = the LAST (latest) unit-complete time across all our
+  // units on this call — the call isn't clear until the final unit is done.
+  (function(){
+    var latestMin = null, latestStr = null;
+    for (var appName in units) {
+      var comp = units[appName].complete;
+      if (!comp) continue;
+      var p = comp.split(':');
+      var mins = parseInt(p[0],10)*60 + parseInt(p[1],10);
+      if (latestMin === null || mins > latestMin) { latestMin = mins; latestStr = comp; }
+    }
+    if (latestStr) out.clear = latestStr;
+  })();
   if (Object.keys(units).length) out._units = units;
 
   // ── Mutual aid direction (Given / Received) ──
@@ -1974,6 +1989,7 @@ function applyDispatchParse(rawText) {
   if (got.runNum && !F.runNum) { F.runNum = got.runNum; filled.push('Incident # ' + got.runNum); }
   if (got.date && !F.date)     { F.date = got.date;     filled.push('Date ' + got.date); }
   if (got.disp && !F.disp)     { F.disp = got.disp;     filled.push('Dispatch time ' + got.disp); }
+  if (got.clear && !F.clear)   { F.clear = got.clear;   filled.push('Cleared ' + got.clear); }
   if (got.address && !F.address) { F.address = got.address; filled.push('Address ' + got.address); }
   if (got._cat && !F.nerisCat) {
     F.nerisCat = got._cat;
