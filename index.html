@@ -3382,7 +3382,7 @@ function tabPreview() {
   histCard.className = 'card';
   const histTitle = document.createElement('div');
   histTitle.className = 'card-title';
-  histTitle.textContent = 'Report History';
+  histTitle.textContent = 'Recent Reports (last 5)';
   const histBody = document.createElement('div');
   histBody.className = 'card-body';
 
@@ -3448,17 +3448,28 @@ function tabPreview() {
   }
 
   // Try the shared cloud list first; fall back to this device's local
-  // history if the Worker can't be reached (offline, etc.)
+  // history if the Worker can't be reached (offline, etc.). Only the 5
+  // most recent are shown here — use "View Full History" for everything.
   fetch(REPORTS_API_URL)
     .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
     .then(list => {
       if (!Array.isArray(list)) throw new Error('bad response');
-      renderHistList(list, true);
+      renderHistList(list.slice(0, 5), true);
     })
     .catch(() => {
       histLoading.textContent = 'Could not reach the shared history — showing reports saved on this device only.';
-      renderHistList(getHistory(), false);
+      renderHistList(getHistory().slice(0, 5), false);
     });
+
+  const btnFullHist = document.createElement('button');
+  btnFullHist.className = 'btn-print';
+  btnFullHist.textContent = '🔍 View Full History';
+  btnFullHist.style.background = '#555';
+  btnFullHist.style.marginTop = '10px';
+  btnFullHist.addEventListener('click', () => {
+    window.open('report-history.html', '_blank');
+  });
+  wrap.appendChild(btnFullHist);
 
   return wrap;
 }
