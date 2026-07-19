@@ -304,11 +304,11 @@
 
 <script>
 // ══════════════════════════════
-// DATA — PERSONNEL loaded from personnel.json
+// DATA — PERSONNEL loaded from the Cloudflare roster API (see ROSTER_API_URL)
 // ══════════════════════════════
 let PERSONNEL = [];  // filled by loadPersonnel()
 
-// Fallback roster used if personnel.json cannot be fetched
+// Fallback roster used if the roster API cannot be reached (offline, etc.)
 const PERSONNEL_FALLBACK = [
   {name:"Anthony, Robert",  badge:"8",   qual:"int"},
   {name:"Bacon, Jason",     badge:"80",  qual:"int"},
@@ -351,13 +351,17 @@ const PERSONNEL_FALLBACK = [
   {name:"Wells, Jason",     badge:"120", qual:"int"},
 ];
 
+// Cloudflare Worker that serves the live roster (see roster-worker.js).
+// Update this if the Worker is ever redeployed under a different URL.
+const ROSTER_API_URL = 'https://aurelius-roster-api.ryanhultz.workers.dev/roster';
+
 async function loadPersonnel() {
   // Always start with the built-in roster so the app is never stuck
   if (PERSONNEL.length === 0) PERSONNEL = [...PERSONNEL_FALLBACK];
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000); // 4-second timeout
-    const res = await fetch('personnel.json?v=' + Date.now(), { signal: controller.signal });
+    const res = await fetch(ROSTER_API_URL + '?v=' + Date.now(), { signal: controller.signal });
     clearTimeout(timer);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
@@ -368,7 +372,7 @@ async function loadPersonnel() {
         qual: String(p.qual||'').trim().toLowerCase(),
       })).filter(p => p.name && p.badge);
       PERSONNEL.sort((a,b) => a.name.localeCompare(b.name));
-      console.log(`Loaded ${PERSONNEL.length} personnel from personnel.json`);
+      console.log(`Loaded ${PERSONNEL.length} personnel from the roster API`);
     }
   } catch(e) {
     console.warn('Using built-in roster:', e.message);
@@ -3997,24 +4001,13 @@ try {
   console.error('Boot error:', bootErr);
 }
 
-// Then try to load updated personnel.json in background
-fetch('personnel.json?v=' + Date.now())
-  .then(r => r.ok ? r.json() : Promise.reject('not ok'))
-  .then(data => {
-    if (Array.isArray(data) && data.length > 0) {
-      PERSONNEL = data.map(p => ({
-        name: String(p.name||'').trim(),
-        badge: String(p.badge||'').trim(),
-        qual: String(p.qual||'').trim().toLowerCase(),
-      })).filter(p => p.name && p.badge);
-      PERSONNEL.sort((a,b) => a.name.localeCompare(b.name));
-      // Silently re-render current tab to pick up updated roster
-      renderTab();
-      document.getElementById('header-sub').textContent =
-        '#' + (F.runNum||'—') + ' · ' + (F.date||'No date set');
-    }
-  })
-  .catch(() => { /* stay with built-in fallback */ });
+// Then try to load the live roster from the Cloudflare Worker in the background
+loadPersonnel().then(() => {
+  // Silently re-render current tab to pick up updated roster
+  renderTab();
+  var hs = document.getElementById('header-sub');
+  if (hs) hs.textContent = '#' + (F.runNum||'—') + ' · ' + (F.date||'No date set');
+});
 </script>
 </body>
 </html>
