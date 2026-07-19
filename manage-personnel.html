@@ -10,9 +10,11 @@
     button{cursor:pointer;font-family:Arial,sans-serif}
 
     /* ── Header ── */
-    header{background:linear-gradient(135deg,#8b0000,#5a0000);color:#fff;padding:16px 20px 14px}
+    header{background:linear-gradient(135deg,#8b0000,#5a0000);color:#fff;padding:16px 20px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
     header h1{font-size:20px;font-weight:700}
     header p{font-size:12px;opacity:.7;margin-top:3px}
+    .back-link{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.15);color:#fff;text-decoration:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap;flex-shrink:0}
+    .back-link:hover{background:rgba(255,255,255,.25)}
 
     .container{max-width:820px;margin:0 auto;padding:16px}
 
@@ -129,9 +131,20 @@
 
 <!-- ── Header ── -->
 <header>
-  <h1>Aurelius Fire &amp; Rescue</h1>
-  <p>Personnel Manager — changes save instantly, no upload needed</p>
+  <div>
+    <h1>Aurelius Fire &amp; Rescue</h1>
+    <p>Personnel Manager — changes save instantly, no upload needed</p>
+  </div>
+  <a class="back-link" id="back-link" href="index.html">← Back to App</a>
 </header>
+<script>
+  // If this page was opened in a new tab from the app (window.open), closing
+  // it returns the user to the app tab directly. Otherwise fall back to a
+  // normal link to index.html.
+  document.getElementById('back-link').addEventListener('click', function(e) {
+    if (window.opener) { e.preventDefault(); window.close(); }
+  });
+</script>
 
 <div class="container">
 
