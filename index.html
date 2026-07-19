@@ -355,6 +355,11 @@ const PERSONNEL_FALLBACK = [
 // Update this if the Worker is ever redeployed under a different URL.
 const ROSTER_API_URL = 'https://aurelius-roster-api.ryanhultz.workers.dev/roster';
 
+// Cloudflare Worker that stores completed reports centrally (see
+// reports-worker.js). Reports are public information — no login/key
+// required for reads or writes, same policy as the roster's reads.
+const REPORTS_API_URL = 'https://aurelius-reports-api.ryanhultz.workers.dev/reports';
+
 async function loadPersonnel() {
   // Always start with the built-in roster so the app is never stuck
   if (PERSONNEL.length === 0) PERSONNEL = [...PERSONNEL_FALLBACK];
@@ -841,7 +846,10 @@ function reportHasData() {
   return false;
 }
 
-// Archive the current report into history (newest first), dedupe by id
+// Archive the current report into history (newest first), dedupe by id.
+// Saves to localStorage immediately (always works, even offline), and
+// also pushes to the shared cloud database in the background so every
+// member's app can see it.
 function archiveCurrent() {
   if (!reportHasData()) return;
   const hist = getHistory();
@@ -852,6 +860,25 @@ function archiveCurrent() {
   const filtered = hist.filter(r => r._id !== F._id);
   filtered.unshift(JSON.parse(JSON.stringify(F)));
   setHistory(filtered);
+  saveReportToCloud(F);
+}
+
+// Push one report to the shared cloud database. Fire-and-forget: if it
+// fails (offline, Worker down), the report still lives in local history
+// and gets synced next time saveReportToCloud succeeds for it.
+async function saveReportToCloud(report) {
+  try {
+    const icP = PERSONNEL.find(p => p.badge === report.ic);
+    const payload = Object.assign({}, report, { _icName: icP ? icP.name : (report.ic||'') });
+    const res = await fetch(REPORTS_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (e) {
+    console.warn('Could not save report to cloud (kept locally):', e.message);
+  }
 }
 
 // Start a brand-new report (archives the current one first)
@@ -950,11 +977,38 @@ function loadFromHistory(id) {
   render();
 }
 
-// Delete a report from history
+// Delete a report from history (local + cloud)
 function deleteFromHistory(id) {
   if (!confirm("Delete this report from history? This cannot be undone.")) return;
   setHistory(getHistory().filter(r => r._id !== id));
+  deleteReportFromCloud(id);
   render();
+}
+
+async function deleteReportFromCloud(id) {
+  try {
+    const res = await fetch(REPORTS_API_URL + '?id=' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (e) {
+    console.warn('Could not delete report from cloud:', e.message);
+  }
+}
+
+// Open a report that exists in the cloud but maybe not in local history
+// (e.g. filed by another member on a different device).
+async function loadFromCloudReport(id) {
+  try {
+    const res = await fetch(REPORTS_API_URL + '?id=' + encodeURIComponent(id));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const found = await res.json();
+    if (reportHasData() && F._id !== id) archiveCurrent();
+    F = Object.assign(blankReport(), found);
+    tab = 0;
+    try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
+    render();
+  } catch (e) {
+    alert('Could not load that report: ' + e.message);
+  }
 }
 
 function clearForm() {
@@ -3299,25 +3353,41 @@ function tabPreview() {
   });
   wrap.appendChild(btnRoster);
 
-  // ── Report History card ──────────────────────────────────
-  const hist = getHistory();
+  // ── Report History card (shared across all members via the cloud) ──
   const histCard = document.createElement('div');
   histCard.className = 'card';
   const histTitle = document.createElement('div');
   histTitle.className = 'card-title';
-  histTitle.textContent = 'Report History (last 10)';
+  histTitle.textContent = 'Report History';
   const histBody = document.createElement('div');
   histBody.className = 'card-body';
 
-  if (!hist.length) {
-    const none = document.createElement('div');
-    none.style.cssText = 'font-size:13px;color:#888;padding:4px 0';
-    none.textContent = 'No saved reports yet. Reports are saved here automatically when you generate a PDF or start a new report.';
-    histBody.appendChild(none);
-  } else {
-    hist.forEach(r => {
-      const icn = (PERSONNEL.find(p=>p.badge===r.ic)||{name:r.ic||''}).name;
-      const isCurrent = r._id === F._id;
+  const histLoading = document.createElement('div');
+  histLoading.style.cssText = 'font-size:13px;color:#888;padding:4px 0';
+  histLoading.textContent = 'Loading shared report history…';
+  histBody.appendChild(histLoading);
+
+  histCard.appendChild(histTitle);
+  histCard.appendChild(histBody);
+  wrap.appendChild(histCard);
+
+  function renderHistList(list, fromCloud) {
+    histBody.innerHTML = '';
+    if (!list.length) {
+      const none = document.createElement('div');
+      none.style.cssText = 'font-size:13px;color:#888;padding:4px 0';
+      none.textContent = 'No saved reports yet. Reports are saved here automatically when you generate a PDF or start a new report.';
+      histBody.appendChild(none);
+      return;
+    }
+    list.forEach(r => {
+      const isCurrent = r._id === F._id || r.id === F._id;
+      const rid = r._id || r.id;
+      const runNum = r.runNum || r.run_num || '';
+      const date = r.date || '';
+      const icName = r._icName || r.ic_name || (PERSONNEL.find(p=>p.badge===r.ic)||{name:''}).name;
+      const savedTs = r._saved || r.saved_at;
+
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0e8d8';
 
@@ -3325,11 +3395,11 @@ function tabPreview() {
       info.style.cssText = 'flex:1;min-width:0';
       const line1 = document.createElement('div');
       line1.style.cssText = 'font-size:14px;font-weight:700;color:#1a1a1a';
-      line1.textContent = (r.runNum || '(no incident #)') + (isCurrent ? '  • current' : '');
+      line1.textContent = (runNum || '(no incident #)') + (isCurrent ? '  • current' : '');
       const line2 = document.createElement('div');
       line2.style.cssText = 'font-size:11px;color:#888';
-      const savedDate = r._saved ? new Date(r._saved).toLocaleString() : '';
-      line2.textContent = [r.date||'no date', icn?('IC '+icn):'', savedDate].filter(Boolean).join('  ·  ');
+      const savedDate = savedTs ? new Date(savedTs).toLocaleString() : '';
+      line2.textContent = [date||'no date', icName?('IC '+icName):'', savedDate].filter(Boolean).join('  ·  ');
       info.appendChild(line1);
       info.appendChild(line2);
       row.appendChild(info);
@@ -3337,22 +3407,34 @@ function tabPreview() {
       const openBtn = document.createElement('button');
       openBtn.textContent = 'Open';
       openBtn.style.cssText = 'background:#8b0000;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;font-family:Georgia,serif;flex-shrink:0';
-      openBtn.addEventListener('click', () => loadFromHistory(r._id));
+      openBtn.addEventListener('click', () => {
+        if (fromCloud && !getHistory().find(x => x._id === rid)) loadFromCloudReport(rid);
+        else loadFromHistory(rid);
+      });
       row.appendChild(openBtn);
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '✕';
       delBtn.style.cssText = 'background:none;border:1px solid #c8a97a;color:#8b0000;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;font-family:Georgia,serif;flex-shrink:0';
-      delBtn.addEventListener('click', () => deleteFromHistory(r._id));
+      delBtn.addEventListener('click', () => deleteFromHistory(rid));
       row.appendChild(delBtn);
 
       histBody.appendChild(row);
     });
   }
 
-  histCard.appendChild(histTitle);
-  histCard.appendChild(histBody);
-  wrap.appendChild(histCard);
+  // Try the shared cloud list first; fall back to this device's local
+  // history if the Worker can't be reached (offline, etc.)
+  fetch(REPORTS_API_URL)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(list => {
+      if (!Array.isArray(list)) throw new Error('bad response');
+      renderHistList(list, true);
+    })
+    .catch(() => {
+      histLoading.textContent = 'Could not reach the shared history — showing reports saved on this device only.';
+      renderHistList(getHistory(), false);
+    });
 
   return wrap;
 }
