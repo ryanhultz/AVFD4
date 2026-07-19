@@ -158,22 +158,55 @@ async function loadReports() {
   }
 }
 
-function doSearch() {
-  const q = document.getElementById('search-inp').value.trim().toLowerCase();
-  const meta = document.getElementById('search-meta');
+let searchTimer = null;
 
-  let matches = allReports;
-  if (q) {
-    matches = allReports.filter(r => {
-      const hay = [r.run_num, r.date, r.address, r.neris_type, r.ic_name]
-        .map(x => (x||'').toLowerCase()).join(' | ');
-      return hay.indexOf(q) >= 0;
-    });
-    meta.textContent = `${matches.length} of ${allReports.length} reports match "${q}"`;
-  } else {
-    meta.textContent = `${allReports.length} total reports`;
+// If the search text looks like a date (M/D, M/D/YYYY, or already
+// YYYY-MM-DD), convert it to the ISO fragment the database actually
+// stores dates in ("2026-07-19"), so a natural date search still matches.
+function normalizeDateQuery(q) {
+  // Already ISO or a partial ISO fragment (e.g. "2026-07" or "2026-07-19")
+  if (/^\d{4}(-\d{1,2}(-\d{1,2})?)?$/.test(q)) return q;
+
+  // M/D or M/D/YYYY or M/D/YY
+  const m = q.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2}|\d{4}))?$/);
+  if (m) {
+    const mm = m[1].padStart(2, '0');
+    const dd = m[2].padStart(2, '0');
+    if (m[3]) {
+      const yyyy = m[3].length === 2 ? '20' + m[3] : m[3];
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    // No year given — search month-day anywhere (matches any year)
+    return `-${mm}-${dd}`;
   }
-  renderResults(matches);
+
+  return q; // not date-shaped, leave as-is
+}
+
+function doSearch() {
+  const q = document.getElementById('search-inp').value.trim();
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => runSearch(q), 300); // debounce 300ms
+}
+
+async function runSearch(q) {
+  const url = getWorkerUrl();
+  const meta = document.getElementById('search-meta');
+  const queryTerm = normalizeDateQuery(q);
+  try {
+    const fetchUrl = queryTerm ? url + '?q=' + encodeURIComponent(queryTerm) : url;
+    const r = await fetch(fetchUrl);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const list = await r.json();
+    if (!Array.isArray(list)) throw new Error('bad response');
+    allReports = list;
+    meta.textContent = q
+      ? `${list.length} report${list.length===1?'':'s'} match "${q}"`
+      : `${list.length} total reports`;
+    renderResults(list);
+  } catch (err) {
+    meta.textContent = 'Search failed: ' + err.message;
+  }
 }
 
 function esc(s){return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
