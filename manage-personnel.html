@@ -22,17 +22,6 @@
     #status.err{background:#f8d7da;color:#721c24;border:1.5px solid #f0b8bc;display:block}
     @keyframes fadein{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
 
-    /* ── Sticky save bar ── */
-    #save-bar{
-      position:sticky;top:0;z-index:50;
-      background:#fff3cd;border-bottom:2px solid #ffc107;
-      padding:10px 16px;display:none;
-      align-items:center;justify-content:space-between;gap:10px;
-      font-size:13px;font-weight:600;color:#5a3e00;
-    }
-    #save-bar.visible{display:flex}
-    #save-bar .bar-btns{display:flex;gap:8px}
-
     /* ── Buttons ── */
     .btn{padding:10px 18px;border:none;border-radius:8px;font-size:14px;font-weight:600}
     .btn-red   {background:#8b0000;color:#fff}
@@ -99,6 +88,11 @@
       .btn{padding:9px 12px;font-size:13px}
       td,th{padding:8px 8px;font-size:13px}
     }
+    /* ── Cloud connection box ── */
+    .conn{background:#fff;border-radius:10px;border:1.5px solid #e0c9a6;padding:16px;margin-bottom:16px;font-size:13px;line-height:1.6}
+    .conn h3{font-size:14px;font-weight:700;color:#8b0000;margin-bottom:8px}
+    .conn input{width:100%;border:1.5px solid #c8a97a;border-radius:8px;padding:10px 12px;font-size:15px;margin-top:6px;margin-bottom:10px;font-family:Arial,sans-serif}
+    .conn .connected{color:#155724;font-weight:700;font-size:13px}
   </style>
 </head>
 <body>
@@ -136,30 +130,35 @@
 <!-- ── Header ── -->
 <header>
   <h1>Aurelius Fire &amp; Rescue</h1>
-  <p>Personnel Manager — edit the roster then download and upload to GitHub</p>
+  <p>Personnel Manager — changes save instantly, no upload needed</p>
 </header>
-
-<!-- ── Sticky unsaved-changes bar ── -->
-<div id="save-bar">
-  <span>⚠️ You have unsaved changes</span>
-  <div class="bar-btns">
-    <button class="btn btn-blue btn-sm" onclick="downloadJSON()">⬇ Download personnel.json</button>
-    <button class="btn btn-gray btn-sm" onclick="copyJSON()">📋 Copy JSON</button>
-  </div>
-</div>
 
 <div class="container">
 
   <div id="status"></div>
 
+  <!-- Cloud connection -->
+  <div class="conn" id="conn-box">
+    <h3>Connection</h3>
+    <div id="conn-connected" style="display:none" class="connected">✓ Connected — changes save live to the roster.</div>
+    <div id="conn-form">
+      <label style="font-size:12px;font-weight:700;color:#8b0000">Worker URL</label>
+      <input id="worker-url" type="text" placeholder="https://aurelius-roster-api.YOUR-SUBDOMAIN.workers.dev"/>
+      <label style="font-size:12px;font-weight:700;color:#8b0000">Admin Key</label>
+      <input id="admin-key" type="password" placeholder="Your admin key"/>
+      <button class="btn btn-green btn-sm" onclick="connectCloud()">Connect &amp; Load Roster</button>
+    </div>
+    <div style="font-size:11px;color:#888;margin-top:8px">Saved in this browser only — you won't need to re-enter it here next time.</div>
+    <button class="btn btn-gray btn-sm" id="conn-change-btn" style="display:none;margin-top:8px" onclick="showConnForm()">⚙ Change Connection</button>
+  </div>
+
   <!-- How it works -->
   <div class="howto">
     <h3>How to update the roster</h3>
     <ol>
-      <li>Add, edit or delete members using the buttons in the table</li>
-      <li>Click <strong>Download personnel.json</strong> (or use the bar that appears at the top)</li>
-      <li>Go to your GitHub repo → click <code>personnel.json</code> → pencil icon → paste or upload the file → Commit</li>
-      <li>The run report app refreshes the roster automatically on next load</li>
+      <li>Connect once above using the Worker URL and Admin Key</li>
+      <li>Add, edit, or delete members using the buttons in the table</li>
+      <li>Changes save immediately — the run report app picks them up next time it loads</li>
     </ol>
     <br>
     <strong>CSV import format:</strong> &nbsp;<code>Name,Badge,Qual</code> &nbsp; e.g. &nbsp;<code>Smith John,42,emt/int</code><br>
@@ -167,12 +166,8 @@
   </div>
 
   <!-- Actions -->
-  <div class="actions">
+  <div class="actions" id="main-actions" style="display:none">
     <button class="btn btn-green" onclick="openModal(-1)">+ Add Member</button>
-    <button class="btn btn-blue" onclick="downloadJSON()">⬇ Download personnel.json</button>
-    <button class="btn btn-gray" onclick="copyJSON()">📋 Copy JSON</button>
-    <button class="btn btn-outline" onclick="document.getElementById('load-file-inp').click()">📂 Load JSON file</button>
-    <input type="file" id="load-file-inp" accept=".json" style="display:none" onchange="handleLoadFile(event)">
   </div>
 
   <!-- Roster table -->
@@ -216,17 +211,51 @@
 // STATE
 // ════════════════════════════════════════
 let roster = [];
-let dirty = false;    // unsaved changes
 let editingIdx = -1;  // -1 = new row
 
-function markDirty() {
-  dirty = true;
-  document.getElementById('save-bar').classList.add('visible');
+function getConn() {
+  return {
+    url: (localStorage.getItem('afr_worker_url') || '').replace(/\/$/, ''),
+    key: localStorage.getItem('afr_admin_key') || '',
+  };
 }
 
-function markClean() {
-  dirty = false;
-  document.getElementById('save-bar').classList.remove('visible');
+function showConnForm() {
+  document.getElementById('conn-form').style.display = 'block';
+  document.getElementById('conn-connected').style.display = 'none';
+  document.getElementById('conn-change-btn').style.display = 'none';
+  const c = getConn();
+  document.getElementById('worker-url').value = c.url;
+  document.getElementById('admin-key').value = c.key;
+}
+
+function connectCloud() {
+  const url = document.getElementById('worker-url').value.trim();
+  const key = document.getElementById('admin-key').value.trim();
+  if (!url) { showStatus('Enter the Worker URL first.', 'err'); return; }
+  localStorage.setItem('afr_worker_url', url);
+  localStorage.setItem('afr_admin_key', key);
+  loadFromCloud();
+}
+
+async function loadFromCloud() {
+  const c = getConn();
+  if (!c.url) { showConnForm(); return; }
+  try {
+    const r = await fetch(c.url + '/roster');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    roster = await r.json();
+    roster.sort((a,b) => a.name.localeCompare(b.name));
+    document.getElementById('conn-form').style.display = 'none';
+    document.getElementById('conn-connected').style.display = 'block';
+    document.getElementById('conn-change-btn').style.display = 'inline-block';
+    document.getElementById('main-actions').style.display = 'flex';
+    renderTable();
+    showStatus(`✓ Loaded ${roster.length} members`);
+  } catch (err) {
+    showStatus('Could not load roster: ' + err.message, 'err');
+    showConnForm();
+  }
 }
 
 // ════════════════════════════════════════
@@ -312,7 +341,7 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
 
-function saveModal() {
+async function saveModal() {
   const name  = document.getElementById('m-name').value.trim();
   const badge = document.getElementById('m-badge').value.trim();
   const qual  = document.getElementById('m-qual').value;
@@ -320,19 +349,21 @@ function saveModal() {
   if (!name)  { document.getElementById('m-name').focus();  return; }
   if (!badge) { document.getElementById('m-badge').focus(); return; }
 
-  if (editingIdx === -1) {
-    roster.push({ name, badge, qual });
-    roster.sort((a,b) => a.name.localeCompare(b.name));
-    showStatus(`Added: ${name}`);
-  } else {
-    roster[editingIdx] = { name, badge, qual };
-    roster.sort((a,b) => a.name.localeCompare(b.name));
-    showStatus(`Updated: ${name}`);
+  const c = getConn();
+  try {
+    const r = await fetch(c.url + '/roster', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': c.key },
+      body: JSON.stringify({ name, badge, qual }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    closeModal();
+    showStatus(`✓ Saved: ${name}`);
+    loadFromCloud();
+  } catch (err) {
+    showStatus('Save failed: ' + err.message, 'err');
   }
-
-  closeModal();
-  renderTable();
-  markDirty();
 }
 
 // Close modal on overlay click
@@ -351,90 +382,22 @@ document.addEventListener('keydown', e => {
 // ════════════════════════════════════════
 // DELETE
 // ════════════════════════════════════════
-function deleteRow(i) {
-  const name = roster[i].name;
-  if (!confirm(`Remove "${name}" from the roster?`)) return;
-  roster.splice(i, 1);
-  renderTable();
-  markDirty();
-  showStatus(`Removed: ${name}`);
-}
-
-// ════════════════════════════════════════
-// JSON EXPORT
-// ════════════════════════════════════════
-function toJSON() {
-  return JSON.stringify(
-    roster.map(p => ({
-      name:  p.name.trim(),
-      badge: String(p.badge).trim(),
-      qual:  (p.qual || '').trim().toLowerCase(),
-    })),
-    null, 2
-  );
-}
-
-function downloadJSON() {
-  const blob = new Blob([toJSON()], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'personnel.json';
-  a.click();
-  markClean();
-  showStatus('✓ personnel.json downloaded. Upload it to your GitHub repo to go live.');
-}
-
-function copyJSON() {
-  const text = toJSON();
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).then(() => {
-      markClean();
-      showStatus('✓ JSON copied to clipboard. Paste into personnel.json on GitHub.');
-    }).catch(() => fallbackCopy(text));
-  } else {
-    fallbackCopy(text);
+async function deleteRow(i) {
+  const p = roster[i];
+  if (!confirm(`Remove "${p.name}" from the roster?`)) return;
+  const c = getConn();
+  try {
+    const r = await fetch(c.url + '/roster?badge=' + encodeURIComponent(p.badge), {
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': c.key },
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    showStatus(`Removed: ${p.name}`);
+    loadFromCloud();
+  } catch (err) {
+    showStatus('Delete failed: ' + err.message, 'err');
   }
-}
-
-function fallbackCopy(text) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand('copy');
-  document.body.removeChild(ta);
-  markClean();
-  showStatus('✓ JSON copied to clipboard.');
-}
-
-// ════════════════════════════════════════
-// LOAD JSON FILE
-// ════════════════════════════════════════
-function handleLoadFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!Array.isArray(data)) throw new Error('Expected a JSON array');
-      roster = data.map(p => ({
-        name:  String(p.name  || '').trim(),
-        badge: String(p.badge || '').trim(),
-        qual:  String(p.qual  || '').toLowerCase().trim(),
-      })).filter(p => p.name && p.badge);
-      roster.sort((a,b) => a.name.localeCompare(b.name));
-      renderTable();
-      markClean();
-      showStatus(`✓ Loaded ${roster.length} members from ${file.name}`);
-    } catch(err) {
-      showStatus('Error reading file: ' + err.message, 'err');
-    }
-  };
-  reader.readAsText(file);
-  e.target.value = '';
 }
 
 // ════════════════════════════════════════
@@ -452,7 +415,7 @@ function handleCSVFile(e) {
   e.target.value = '';
 }
 
-function importCSV() {
+async function importCSV() {
   const raw = document.getElementById('csv-paste').value.trim();
   if (!raw) { showStatus('Paste CSV text first.', 'err'); return; }
 
@@ -484,19 +447,23 @@ function importCSV() {
     return;
   }
 
-  if (roster.length > 0) {
-    const replace = confirm(
-      `Import ${imported.length} members.\n\nOK = Replace entire roster\nCancel = Add to existing roster`
-    );
-    roster = replace ? imported : [...roster, ...imported];
-  } else {
-    roster = imported;
+  const c = getConn();
+  showStatus(`Importing ${imported.length} members…`);
+  let ok = 0, failed = 0;
+  for (const p of imported) {
+    try {
+      const r = await fetch(c.url + '/roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': c.key },
+        body: JSON.stringify(p),
+      });
+      if (r.ok) ok++; else failed++;
+    } catch (e) { failed++; }
   }
 
-  roster.sort((a,b) => a.name.localeCompare(b.name));
-  renderTable();
-  markDirty();
-  showStatus(`✓ Imported ${imported.length} members${skipped > 0 ? `, skipped ${skipped} invalid rows` : ''}.`);
+  document.getElementById('csv-paste').value = '';
+  loadFromCloud();
+  showStatus(`✓ Imported ${ok} members` + (skipped > 0 ? `, skipped ${skipped} invalid rows` : '') + (failed > 0 ? `, ${failed} failed` : ''));
 }
 
 // Drag-and-drop on drop zone
@@ -516,24 +483,14 @@ dz.addEventListener('drop', e => {
 });
 
 // ════════════════════════════════════════
-// BOOT — fetch current personnel.json
+// BOOT — auto-connect if we have a saved Worker URL
 // ════════════════════════════════════════
-fetch('personnel.json?v=' + Date.now())
-  .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
-  .then(data => {
-    roster = data.map(p => ({
-      name:  String(p.name  || '').trim(),
-      badge: String(p.badge || '').trim(),
-      qual:  String(p.qual  || '').toLowerCase().trim(),
-    })).filter(p => p.name && p.badge);
-    roster.sort((a,b) => a.name.localeCompare(b.name));
-    renderTable();
-    showStatus(`✓ Loaded ${roster.length} members from personnel.json`);
-  })
-  .catch(() => {
-    renderTable();
-    showStatus('No personnel.json found — add members manually or import a CSV.', 'err');
-  });
+(function boot(){
+  renderTable(); // shows empty state until connected
+  const c = getConn();
+  if (c.url) loadFromCloud();
+  else showConnForm();
+})();
 </script>
 </body>
 </html>
