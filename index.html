@@ -3320,6 +3320,30 @@ function tabPreview() {
   rbCard.appendChild(rbBody);
   wrap.appendChild(rbCard);
 
+  // ── Save button (requires Report By) ─────────────────────
+  const saveStatus = document.createElement('div');
+  saveStatus.style.cssText = 'font-size:12.5px;margin:0 0 10px;line-height:1.4;min-height:0';
+
+  const btnSave = document.createElement('button');
+  btnSave.className = 'btn-print';
+  btnSave.textContent = '💾 Save Report';
+  btnSave.style.background = '#1a4a8a';
+  btnSave.addEventListener('click', () => {
+    if (!F.reportBy) {
+      saveStatus.style.color = '#8b0000';
+      saveStatus.textContent = '⚠ Select who is filing this report (Report By) before saving.';
+      rbSel.focus();
+      rbSel.style.borderColor = '#8b0000';
+      return;
+    }
+    rbSel.style.borderColor = '';
+    archiveCurrent();
+    saveStatus.style.color = '#2d6a2d';
+    saveStatus.textContent = '✓ Report saved.';
+  });
+  wrap.appendChild(btnSave);
+  wrap.appendChild(saveStatus);
+
   const btn = document.createElement('button');
   btn.className = 'btn-print';
   btn.textContent = '📄 Generate & Download PDF';
