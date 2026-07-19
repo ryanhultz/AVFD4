@@ -2680,6 +2680,15 @@ function tabPersonnel() {
   // ── Personnel Injured ────────────────────────────────────
   wrap.appendChild(injuredCard());
 
+  // ── Reload Roster button ─────────────────────────────────
+  const btnReload = document.createElement('button');
+  btnReload.className = 'btn-print';
+  btnReload.textContent = '🔄 Reload Roster';
+  btnReload.style.background = '#2d6a2d';
+  btnReload.style.marginTop = '14px';
+  btnReload.addEventListener('click', (e) => reloadPersonnel(e));
+  wrap.appendChild(btnReload);
+
   return wrap;
 }
 
