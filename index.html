@@ -3275,14 +3275,16 @@ function tabPreview() {
   btn2.addEventListener('click', generateBlankPDF);
   wrap.appendChild(btn2);
 
-  // ── Reload Roster button ─────────────────────────────────
-  const btnReload = document.createElement('button');
-  btnReload.className = 'btn-print';
-  btnReload.textContent = '🔄 Reload Roster';
-  btnReload.style.background = '#2d6a2d';
-  btnReload.style.marginTop = '14px';
-  btnReload.addEventListener('click', reloadPersonnel);
-  wrap.appendChild(btnReload);
+  // ── Manage Personnel button ──────────────────────────────
+  const btnRoster = document.createElement('button');
+  btnRoster.className = 'btn-print';
+  btnRoster.textContent = '👥 Manage Personnel';
+  btnRoster.style.background = '#2d6a2d';
+  btnRoster.style.marginTop = '14px';
+  btnRoster.addEventListener('click', () => {
+    window.open('manage-personnel.html', '_blank');
+  });
+  wrap.appendChild(btnRoster);
 
   // ── Report History card ──────────────────────────────────
   const hist = getHistory();
