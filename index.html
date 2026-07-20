@@ -1792,6 +1792,19 @@ const CAD_UNIT_MAP = {
   "AURTK1": "Tanker 1",
 };
 
+// CAD unit-code prefixes → ambulance services (matches the EMS tab's
+// AMB_SERVICES dropdown). A unit code with an "A" immediately after the
+// department prefix denotes an ambulance (e.g. "ACA3" = Auburn City
+// Ambulance 3, "THRA1B" = Throop Ambulance). Checked BEFORE the fire
+// mutual-aid department map, since an ambulance unit should populate the
+// EMS tab — never the Mutual Aid card or be treated as a fire apparatus.
+const CAD_AMB_MAP = {
+  "ACA": "AUBURN CITY",   // e.g. ACA3
+  "THRA": "THROOP",       // e.g. THRA1B
+  "FLMA": "FLEMING",      // e.g. FLMA1B
+  "CAYA": "CAYUGA",
+};
+
 // CAD unit-code prefixes → mutual-aid departments (only those in the
 // mutual-aid dropdown). Used to detect Given/Received aid. County, EMS,
 // and law units (4TNA1A, 547, CCAR1, CFI31, CCREH, EM…) are intentionally
@@ -1907,6 +1920,7 @@ function parseDispatchText(text) {
   // e.g. "AURTA1 ENRT    18:54:32 07/13/26    FLEM4 ..."
   var units = {};
   var otherDepts = {};   // mutual-aid departments seen in the runtimes
+  var ambSeen = {};      // ambulance services seen in the runtimes (by AMB_SERVICES name)
   var aureliusResponded = false;
   var reUnit = /^\s*([A-Z0-9]{3,8})\s+(DISP|ENRT|ARRVD|COMP|OK)\s+(\d{2}):(\d{2}):\d{2}\s/gm;
   var m2;
@@ -1923,12 +1937,21 @@ function parseDispatchText(text) {
       if (m2[2] === 'DISP') units[app].dispatched = true;
       continue;
     }
-    // Not an Aurelius unit — is it a mutual-aid department we know?
+    // Ambulance unit (e.g. ACA3, THRA1B) — goes to the EMS tab, never
+    // treated as fire apparatus or fire mutual aid.
+    var ambSvc = null;
+    for (var apfx in CAD_AMB_MAP) {
+      if (code.indexOf(apfx) === 0) { ambSvc = CAD_AMB_MAP[apfx]; break; }
+    }
+    if (ambSvc) { ambSeen[ambSvc] = true; continue; }
+
+    // Not an Aurelius unit — is it a mutual-aid fire department we know?
     if (code.indexOf('AUR') === 0) continue; // our own, unmapped variant
     for (var pfx in CAD_DEPT_MAP) {
       if (code.indexOf(pfx) === 0) { otherDepts[CAD_DEPT_MAP[pfx]] = true; break; }
     }
   }
+  if (Object.keys(ambSeen).length) out._ambulances = Object.keys(ambSeen);
 
   // Cleared time = the LAST (latest) unit-complete time across all our
   // units on this call — the call isn't clear until the final unit is done.
@@ -2009,6 +2032,21 @@ function applyDispatchParse(rawText) {
     });
     if (unitNames.length) filled.push('Units ' + unitNames.join(', ') + ' (with times)');
   }
+  if (got._ambulances && got._ambulances.length) {
+    if (!Array.isArray(F.amb)) F.amb = [];
+    while (F.amb.length < 3) F.amb.push({svc:"",custom:"",pcr:"",hospital:"",hospitalOther:""});
+    var addedAmb = [];
+    got._ambulances.forEach(function(svc){
+      // skip if this service is already entered in any slot
+      var already = F.amb.some(function(a){ return a.svc === svc; });
+      if (already) return;
+      var slot = F.amb.findIndex(function(a){ return !a.svc; });
+      if (slot === -1) return; // all 3 slots full
+      F.amb[slot].svc = svc;
+      addedAmb.push(svc);
+    });
+    if (addedAmb.length) filled.push('Ambulance ' + addedAmb.join(', '));
+  }
   if (got._mutualDir && got._mutualAgencies && got._mutualAgencies.length) {
     if (!Array.isArray(F.mutual)) F.mutual = F.mutual ? [F.mutual] : [];
     var addedAgencies = [];
@@ -2021,7 +2059,7 @@ function applyDispatchParse(rawText) {
   var dispText = null;
   if (filled.length && got._dispText) { F.dispActual = got._dispText; dispText = got._dispText; }
   if (filled.length) { saveForm(); updateHeader(); }
-  const anyFound = !!(got.runNum || got.date || got.disp || got.address || got._cat || got._units);
+  const anyFound = !!(got.runNum || got.date || got.disp || got.address || got._cat || got._units || got._ambulances);
   return { filled: filled, dispText: dispText, anyFound: anyFound };
 }
 
