@@ -1919,7 +1919,8 @@ function parseDispatchText(text) {
   // ── Per-unit times from the "Unit RunTimes" table ──
   // e.g. "AURTA1 ENRT    18:54:32 07/13/26    FLEM4 ..."
   var units = {};
-  var otherDepts = {};   // mutual-aid departments seen in the runtimes
+  var otherDepts = {};   // mutual-aid departments seen in the runtimes (real apparatus only)
+  var deptUnitSeen = {}; // tracks whether each dept sent only a chief unit
   var ambSeen = {};      // ambulance services seen in the runtimes (by AMB_SERVICES name)
   var aureliusResponded = false;
   var reUnit = /^\s*([A-Z0-9]{3,8})\s+(DISP|ENRT|ARRVD|COMP|OK)\s+(\d{2}):(\d{2}):\d{2}\s/gm;
@@ -1948,8 +1949,21 @@ function parseDispatchText(text) {
     // Not an Aurelius unit — is it a mutual-aid fire department we know?
     if (code.indexOf('AUR') === 0) continue; // our own, unmapped variant
     for (var pfx in CAD_DEPT_MAP) {
-      if (code.indexOf(pfx) === 0) { otherDepts[CAD_DEPT_MAP[pfx]] = true; break; }
+      if (code.indexOf(pfx) === 0) {
+        var deptName = CAD_DEPT_MAP[pfx];
+        // A chief-only unit (code ends "CHF") doesn't count as sending
+        // real fire apparatus — track it separately so a department that
+        // ONLY sends its chief (with or without an ambulance) isn't
+        // flagged as fire mutual aid.
+        var isChiefUnit = /CHF$/.test(code);
+        if (!deptUnitSeen[deptName]) deptUnitSeen[deptName] = { chiefOnly: true };
+        if (!isChiefUnit) deptUnitSeen[deptName].chiefOnly = false;
+        break;
+      }
     }
+  }
+  for (var dn in deptUnitSeen) {
+    if (!deptUnitSeen[dn].chiefOnly) otherDepts[dn] = true;
   }
   if (Object.keys(ambSeen).length) out._ambulances = Object.keys(ambSeen);
 
