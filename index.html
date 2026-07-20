@@ -708,7 +708,7 @@ const DISPOSITIONS = ["Fire Extinguished","Fire Controlled","Out on Arrival","Pa
 const CAUSES = ["Undetermined","Under Investigation","Accidental","Electrical","Cooking","Heating Equipment","Smoking","Open Flame","Vehicle/Mechanical","Intentional","Natural (lightning/weather)","N/A"];
 
 const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
-const TABS = ["Dispatch","Times","Incident","Apparatus","Personnel","MVC","EMS","Law","Narrative","Finalize"];
+const TABS = ["Dispatch","Command","Times","Incident","Apparatus","Personnel","MVC","EMS","Law","Narrative","Finalize"];
 
 const EMPTY = {
   date:"", runNum:"", ic:"", icRank:"",
@@ -1442,14 +1442,6 @@ function tabIncident() {
   );
   wrap.appendChild(infoCard);
 
-  // ── Incident Command card ───────────────────────────────
-  const icRankOpts = [["","— Select Rank —"], ...IC_RANKS.map(r=>[r,r])];
-  const cmdCard = card('Incident Command',
-    field('Incident Commander', persDropdown(F.ic, v=>{F.ic=v; markOnScene(v); saveForm();}), 10),
-    field('Rank', sel(F.icRank||'', icRankOpts, v=>{F.icRank=v; saveForm();}), 0)
-  );
-  wrap.appendChild(cmdCard);
-
   // ── Address card ─────────────────────────────────────────
   const addrInp = textInp(F.address, v=>{F.address=v;saveForm();}, 'Street address…');
   Object.assign(addrInp.style, UNI);
@@ -1469,6 +1461,48 @@ function tabIncident() {
   locCard.appendChild(locTitle);
   locCard.appendChild(locCardBody);
   wrap.appendChild(locCard);
+
+  // ── Actual Dispatch Text (standalone, with auto-fill) ────
+  const dtBody = document.createElement('div');
+
+  const dtHelp = document.createElement('div');
+  dtHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:8px;line-height:1.4';
+  dtHelp.textContent = 'Paste the dispatch email or text here, then tap Auto-Fill to pull out the incident number, address, date, and time.';
+  dtBody.appendChild(dtHelp);
+
+  const dtTa = document.createElement('textarea');
+  dtTa.className = 'ta';
+  dtTa.rows = 5;
+  dtTa.placeholder = 'Paste the dispatch email / text here…';
+  dtTa.value = F.dispActual || '';
+  Object.assign(dtTa.style, { fontSize:'14px', lineHeight:'1.4', marginBottom:'8px' });
+  dtTa.addEventListener('input', e => { F.dispActual = e.target.value; saveForm(); });
+  dtBody.appendChild(dtTa);
+
+  const dtFillStatus = document.createElement('div');
+  dtFillStatus.style.cssText = 'font-size:12px;color:#888;margin-top:8px;line-height:1.5';
+
+  const dtFillBtn = document.createElement('button');
+  dtFillBtn.textContent = '⚡ Auto-Fill from Text';
+  dtFillBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif';
+  dtFillBtn.addEventListener('click', () => {
+    const res = applyDispatchParse(dtTa.value);
+    if (res.filled.length) {
+      if (res.dispText) dtTa.value = res.dispText;
+      dtFillStatus.style.color = '#2d6a2d';
+      dtFillStatus.textContent = '✓ Filled: ' + res.filled.join(' · ') + '. Review everything before filing.';
+      renderTab();
+    } else {
+      dtFillStatus.style.color = '#8b0000';
+      dtFillStatus.textContent = res.anyFound
+        ? 'Nothing added — those fields are already filled in. Clear a field first to re-fill it.'
+        : 'Couldn\u2019t recognize anything in that text. Fill the fields in manually.';
+    }
+  });
+  dtBody.appendChild(dtFillBtn);
+  dtBody.appendChild(dtFillStatus);
+
+  wrap.appendChild(card('Actual Dispatch Text', dtBody));
 
   // ── Mutual Aid card — progressive multi-select up to 12 ──
   const MUTUAL_AGENCIES = [
@@ -1611,6 +1645,30 @@ function tabIncident() {
   mutualCard.appendChild(mutualTitle);
   mutualCard.appendChild(mutualBody);
   wrap.appendChild(mutualCard);
+
+  return wrap;
+}
+
+// ── Command tab (Incident Commander + Rank) ─────────────────
+function tabCommand() {
+  const wrap = document.createElement('div');
+
+  function persDropdown(currentVal, onChange) {
+    const opts = [["","— Select —"], ...PERSONNEL.map(p=>[p.badge, p.name])];
+    const el = sel(currentVal, opts, onChange);
+    Object.assign(el.style, {
+      width: '100%', boxSizing: 'border-box', height: '46px',
+      padding: '0 12px', fontSize: '16px', lineHeight: '46px', display: 'block',
+    });
+    return el;
+  }
+
+  const icRankOpts = [["","— Select Rank —"], ...IC_RANKS.map(r=>[r,r])];
+  const cmdCard = card('Incident Command',
+    field('Incident Commander', persDropdown(F.ic, v=>{F.ic=v; markOnScene(v); saveForm();}), 10),
+    field('Rank', sel(F.icRank||'', icRankOpts, v=>{F.icRank=v; saveForm();}), 0)
+  );
+  wrap.appendChild(cmdCard);
 
   return wrap;
 }
@@ -2099,48 +2157,6 @@ function applyDispatchParse(rawText) {
 
 function tabDispatch() {
   const wrap = document.createElement('div');
-
-  // ── Actual Dispatch Text (standalone, with auto-fill) ────
-  const dtBody = document.createElement('div');
-
-  const dtHelp = document.createElement('div');
-  dtHelp.style.cssText = 'font-size:11px;color:#888;margin-bottom:8px;line-height:1.4';
-  dtHelp.textContent = 'Paste the dispatch email or text here, then tap Auto-Fill to pull out the incident number, address, date, and time.';
-  dtBody.appendChild(dtHelp);
-
-  const ta = document.createElement('textarea');
-  ta.className = 'ta';
-  ta.rows = 5;
-  ta.placeholder = 'Paste the dispatch email / text here…';
-  ta.value = F.dispActual || '';
-  Object.assign(ta.style, { fontSize:'14px', lineHeight:'1.4', marginBottom:'8px' });
-  ta.addEventListener('input', e => { F.dispActual = e.target.value; saveForm(); });
-  dtBody.appendChild(ta);
-
-  const fillStatus = document.createElement('div');
-  fillStatus.style.cssText = 'font-size:12px;color:#888;margin-top:8px;line-height:1.5';
-
-  const fillBtn = document.createElement('button');
-  fillBtn.textContent = '⚡ Auto-Fill from Text';
-  fillBtn.style.cssText = 'background:#1a4a8a;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:600;font-family:Georgia,serif';
-  fillBtn.addEventListener('click', () => {
-    const res = applyDispatchParse(ta.value);
-    if (res.filled.length) {
-      if (res.dispText) ta.value = res.dispText;
-      fillStatus.style.color = '#2d6a2d';
-      fillStatus.textContent = '✓ Filled: ' + res.filled.join(' · ') + '. Review everything before filing.';
-      renderTab();
-    } else {
-      fillStatus.style.color = '#8b0000';
-      fillStatus.textContent = res.anyFound
-        ? 'Nothing added — those fields are already filled in. Clear a field first to re-fill it.'
-        : 'Couldn\u2019t recognize anything in that text. Fill the fields in manually.';
-    }
-  });
-  dtBody.appendChild(fillBtn);
-  dtBody.appendChild(fillStatus);
-
-  wrap.appendChild(card('Actual Dispatch Text', dtBody));
 
   function optList(arr){ return [["","— Select —"], ...arr.map(x=>[x,x])]; }
 
@@ -4137,7 +4153,7 @@ function renderTabBar() {
 function renderTab() {
   const tc = document.getElementById('tab-content');
   tc.innerHTML = '';
-  const builders = [tabIncident,tabTimes,tabDispatch,tabApparatus,tabPersonnel,tabMVA,tabEMS,tabLaw,tabRemarks,tabPreview];
+  const builders = [tabIncident,tabCommand,tabTimes,tabDispatch,tabApparatus,tabPersonnel,tabMVA,tabEMS,tabLaw,tabRemarks,tabPreview];
   try {
     tc.appendChild(builders[tab]());
   } catch(e) {
