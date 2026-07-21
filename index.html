@@ -405,7 +405,7 @@ async function loadPersonnel() {
   }
 };
 
-const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","Other"];
+const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","SOUTH CAYUGA","Other"];
 
 // Officer ranks for the incident commander
 const IC_RANKS = ["Chief","Assistant Chief","2nd Assistant Chief","Captain","Lieutenant","Firefighter"];
@@ -1508,7 +1508,7 @@ function tabIncident() {
   const MUTUAL_AGENCIES = [
     "Throop Fire","Cayuga Fire","Seneca Falls Fire","Owasco Fire",
     "Auburn Fire","Union Springs Fire","Port Byron Fire","Weedsport Fire",
-    "Fleming Fire","Montezuma Fire","Aurora Fire","Other"
+    "Fleming Fire","Montezuma Fire","Aurora Fire","Scipio Fire","Poplar Ridge Fire","Other"
   ];
 
   if (!Array.isArray(F.mutual)) F.mutual = F.mutual ? [F.mutual] : [];
@@ -1858,11 +1858,15 @@ function tabTimes() {
 const CAD_UNIT_MAP = {
   "AURCHF": "Chief's Vehicle",
   "AUREN1": "Engine 1",
+  "AURRIT": "Engine 1",   // Rapid Intervention Team rides with Engine 1, not separate apparatus
   "AUREN2": "Engine 2",
   "AURRE1": "Rescue 1",
+  "AURRS1": "Rescue 1",   // matches the confirmed "RS" naming pattern (see AURRS2)
   "AURRE2": "Rescue 2",
   "AURRP1": "Rescue 2",
+  "AURRS2": "Rescue 2",   // confirmed from real CAD data (26AU-0256)
   "AURQU1": "Quint 1",
+  "AURQT1": "Quint 1",   // confirmed from real CAD data (26AU-0255)
   "AURSQ1": "Squad 1",
   "AURSQ2": "Squad 2",
   "AURSQ3": "Squad 3",
@@ -1881,6 +1885,7 @@ const CAD_AMB_MAP = {
   "THRA": "THROOP",       // e.g. THRA1B
   "FLMA": "FLEMING",      // e.g. FLMA1B
   "CAYA": "CAYUGA",
+  "SCYA": "SOUTH CAYUGA", // confirmed from real CAD data (26AU-0247), e.g. SCYA1A
 };
 
 // CAD unit-code prefixes → mutual-aid departments (only those in the
@@ -1895,11 +1900,22 @@ const CAD_DEPT_MAP = {
   "AUB": "Auburn Fire",
   "CAY": "Cayuga Fire",
   "UNS": "Union Springs Fire",
+  "USP": "Union Springs Fire",  // confirmed alternate CAD prefix for Union Springs
   "PBY": "Port Byron Fire",
   "WDS": "Weedsport Fire",
   "MON": "Montezuma Fire",
   "ARO": "Aurora Fire",
+  "SPO": "Scipio Fire",         // confirmed from real CAD data (26AU-0239)
+  "PPR": "Poplar Ridge Fire",   // confirmed from real CAD data (26AU-0239)
+  // "LGH" seen in real CAD data but the department name is unknown —
+  // intentionally left unmapped rather than guessed. Add it here if
+  // confirmed later.
 };
+
+// If Scipio/Poplar Ridge/etc. aren't already in the app's Mutual Aid
+// dropdown list, they'll still be recorded correctly here — but the
+// MUTUAL_AGENCIES list on the Dispatch tab should be updated to include
+// them so members can select them manually too.
 
 function parseDispatchText(text) {
   const out = {};
@@ -1913,27 +1929,36 @@ function parseDispatchText(text) {
   }
 
   // ── Incident # — prefer the Aurelius one (26AU-####) from the list ──
+  // Handles both "Incident #: 26AU-0263,..." (colon) and
+  // "INCIDENT # N26-09476,26AC-4802,26AU-0265,..." (no colon) formats.
   var incLine = fld('Incident #');
+  if (!incLine) {
+    var mIncNoColon = t.match(/^\s*Incident\s*#\s+([A-Za-z0-9][A-Za-z0-9,\-]*)\s*$/im);
+    if (mIncNoColon) incLine = mIncNoColon[1].trim();
+  }
   if (incLine) {
     var au = incLine.match(/\b(\d{2}AU-\d+)\b/i);
     out.runNum = au ? au[1] : incLine.split(',')[0].trim();
   }
   if (!out.runNum) {
-    var mNum = t.match(/(?:incident|call|run|event|cfs|inc)\s*(?:number|no\.?|#)?\s*[:#]\s*([A-Za-z0-9][A-Za-z0-9\-\/]{2,20})/i);
+    var mNum = t.match(/(?:incident|call|run|event|cfs|inc)\s*(?:number|no\.?|#)?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-\/]{2,20})/i);
     if (mNum) out.runNum = mNum[1].trim();
   }
 
-  // ── Address (+ township) ──
+  // ── Address (+ township/city) ──
   var addr = fld('Address');
-  var twp  = fld('Township');
+  // Strip trailing same-line fields like "Zone: TRP1" (2+ spaces then a label)
+  if (addr) addr = addr.split(/\s{2,}\S+:\s|\s{2,}Zone\b/i)[0].trim();
+  var twp  = fld('Township') || fld('City');
   if (addr) out.address = twp ? (addr + ', ' + twp) : addr;
   if (!out.address) {
     var mAddr = t.match(/(?:location|addr|incident\s+location)\s*[:#]\s*(.+)/i);
     if (mAddr) out.address = mAddr[1].split(/\s{2,}|\|/)[0].trim().replace(/[,;]\s*$/, '');
   }
 
-  // ── Date + dispatch time from "Date/Time Reported: 18:39:42 07/13/26" ──
-  var rep = fld('Date\\/Time Reported');
+  // ── Date + dispatch time from "Date/Time Reported: 18:39:42 07/13/26"
+  // or "REPORTED: 18:31:25 07/20/26" ──
+  var rep = fld('Date\\/Time Reported') || fld('REPORTED');
   if (rep) {
     var mR = rep.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s+(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
     if (mR) {
@@ -1952,7 +1977,7 @@ function parseDispatchText(text) {
     }
   }
   if (!out.disp) {
-    var mT = t.match(/(?:dispatch(?:ed)?|alarm|toned|received)\s*(?:time)?\s*[:#]?\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+    var mT = t.match(/(?:dispatch(?:ed)?|alarm|toned|received|reported)\s*(?:time)?\s*[:#]?\s*(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
     if (mT) {
       var h = parseInt(mT[1],10), mn = parseInt(mT[2],10), ap = (mT[3]||'').toUpperCase();
       if (ap === 'PM' && h < 12) h += 12;
@@ -1963,13 +1988,15 @@ function parseDispatchText(text) {
 
   // ── Dispatch narrative text: Nature + description + comments ──
   var nature = fld('Nature');
+  // Strip trailing same-line fields like "Type: f" (2+ spaces then a label)
+  if (nature) nature = nature.split(/\s{2,}\S+:\s/)[0].trim();
   var natDesc = fld('Nature Description');
   // Some formats use "Type:" instead of "Nature:" (ignore the CAD's terse "Type: f")
   if (!nature) { var ty = fld('Type'); if (ty && ty.length > 2) nature = ty; }
   var bits = [];
   if (nature) bits.push(nature);
   if (natDesc) bits.push(natDesc);
-  var mCom = t.match(/\n[ \t]*Comments:[ \t]*([\s\S]*?)(?:\n[ \t]*={5,}|\n[ \t]*Unit RunTimes:|$)/);
+  var mCom = t.match(/\n[ \t]*Comments:[ \t]*([\s\S]*?)(?:\n[ \t]*={5,}|\n[ \t]*Unit RunTimes:|\n[ \t]*Contact:|$)/);
   if (mCom) {
     var comTxt = mCom[1]
       // drop "13/07/26 18:39:57 Seamans C:" operator/timestamp lines
@@ -1988,33 +2015,37 @@ function parseDispatchText(text) {
   else if (/fire-?\s*(brush|grass|wildland|outside|rubbish)|brush fire|grass fire/.test(scan)) out._cat = 'FIRE';
   else if (/fire-?\s*chimney|chimney fire/.test(scan)) out._cat = 'FIRE';
   else if (/entrap|extricat|pin-?in|pinned/.test(scan)) out._cat = 'RESCUE';
-  else if (/\bmva\b|\bmvc\b|motor vehicle|car accident/.test(scan)) out._cat = 'MEDICAL';
-  else if (/cardiac|chest pain|stroke|breathing|unresponsive|unconscious|seizure|overdose|\bems\b|medical|sick person|\bfall\b|injur/.test(scan)) out._cat = 'MEDICAL';
+  else if (/\bmva\w*|\bmvc\b|motor vehicle|car accident/.test(scan)) out._cat = 'MEDICAL';
+  else if (/cardiac|chest pain|stroke|breathing|unresponsive|unconscious|seizure|overdose|\bems\b|medical|sick person|\bfall\b|injur|hemorrhage|laceration|bleeding|allerg|sting/.test(scan)) out._cat = 'MEDICAL';
   else if (/gas leak|odor of gas|fuel spill|hazmat|carbon monoxide|wires down|power line|electrical hazard/.test(scan)) out._cat = 'HAZSIT';
-  else if (/alarm|lift assist|service call/.test(scan)) out._cat = 'PUBSERV';
+  else if (/cit\.?\s*assist|citizen assist|lift assist|service call|lockout|locked out/.test(scan)) out._cat = 'PUBSERV';
+  else if (/alarm/.test(scan)) out._cat = 'PUBSERV';
   else if (/cancel|false alarm|good intent/.test(scan)) out._cat = 'NOEMERG';
 
-  // ── Per-unit times from the "Unit RunTimes" table ──
-  // e.g. "AURTA1 ENRT    18:54:32 07/13/26    FLEM4 ..."
+  // ── Units: prefer the "Unit RunTimes" table (has timestamps); fall back
+  // to a flat "Responding Units:" list (just unit codes, no times) ──
   var units = {};
-  var otherDepts = {};   // mutual-aid departments seen in the runtimes (real apparatus only)
+  var otherDepts = {};   // mutual-aid departments seen (real apparatus only)
   var deptUnitSeen = {}; // tracks whether each dept sent only a chief unit
-  var ambSeen = {};      // ambulance services seen in the runtimes (by AMB_SERVICES name)
+  var ambSeen = {};      // ambulance services seen (by AMB_SERVICES name)
   var aureliusResponded = false;
-  var reUnit = /^\s*([A-Z0-9]{3,8})\s+(DISP|ENRT|ARRVD|COMP|OK)\s+(\d{2}):(\d{2}):\d{2}\s/gm;
-  var m2;
-  while ((m2 = reUnit.exec(t)) !== null) {
-    var code = m2[1].toUpperCase();
+
+  // Classifies one unit code: Aurelius apparatus / ambulance / mutual-aid
+  // fire department. `hhmm`/`status` are null when there's no timestamp
+  // (the flat Responding Units list case).
+  function classifyUnit(code, status, hhmm) {
+    code = code.toUpperCase();
     var app = CAD_UNIT_MAP[code];
     if (app) {
       aureliusResponded = true;
-      var hhmm = m2[3] + ':' + m2[4];
       if (!units[app]) units[app] = {};
-      if (m2[2] === 'ENRT' && !units[app].enroute) units[app].enroute = hhmm;
-      if (m2[2] === 'ARRVD' && !units[app].arrived) units[app].arrived = hhmm;
-      if (m2[2] === 'COMP' && !units[app].complete) units[app].complete = hhmm;
-      if (m2[2] === 'DISP') units[app].dispatched = true;
-      continue;
+      if (hhmm) {
+        if (status === 'ENRT' && !units[app].enroute) units[app].enroute = hhmm;
+        if (status === 'ARRVD' && !units[app].arrived) units[app].arrived = hhmm;
+        if (status === 'COMP' && !units[app].complete) units[app].complete = hhmm;
+      }
+      if (status === 'DISP' || !status) units[app].dispatched = true;
+      return;
     }
     // Ambulance unit (e.g. ACA3, THRA1B) — goes to the EMS tab, never
     // treated as fire apparatus or fire mutual aid.
@@ -2022,10 +2053,10 @@ function parseDispatchText(text) {
     for (var apfx in CAD_AMB_MAP) {
       if (code.indexOf(apfx) === 0) { ambSvc = CAD_AMB_MAP[apfx]; break; }
     }
-    if (ambSvc) { ambSeen[ambSvc] = true; continue; }
+    if (ambSvc) { ambSeen[ambSvc] = true; return; }
 
     // Not an Aurelius unit — is it a mutual-aid fire department we know?
-    if (code.indexOf('AUR') === 0) continue; // our own, unmapped variant
+    if (code.indexOf('AUR') === 0) return; // our own, unmapped variant
     for (var pfx in CAD_DEPT_MAP) {
       if (code.indexOf(pfx) === 0) {
         var deptName = CAD_DEPT_MAP[pfx];
@@ -2040,6 +2071,26 @@ function parseDispatchText(text) {
       }
     }
   }
+
+  var reUnit = /^\s*([A-Z0-9]{3,8})\s+(DISP|ENRT|ARRVD|COMP|OK)\s+(\d{2}):(\d{2}):\d{2}\s/gm;
+  var m2, sawRunTimesTable = false;
+  while ((m2 = reUnit.exec(t)) !== null) {
+    sawRunTimesTable = true;
+    classifyUnit(m2[1], m2[2], m2[3] + ':' + m2[4]);
+  }
+
+  if (!sawRunTimesTable) {
+    // No per-unit timestamp table — try a flat "Responding Units:" list,
+    // e.g. "Responding Units: 2E50,2E13,AUREN1,ACA2,THREN1,THRCHF,THRA1B"
+    var mResp = t.match(/^[ \t]*Responding Units:[ \t]*(.+)$/im);
+    if (mResp) {
+      mResp[1].split(',').forEach(function(code){
+        code = code.trim();
+        if (code) classifyUnit(code, null, null);
+      });
+    }
+  }
+
   for (var dn in deptUnitSeen) {
     if (!deptUnitSeen[dn].chiefOnly) otherDepts[dn] = true;
   }
@@ -2083,8 +2134,11 @@ function parseDispatchText(text) {
           if (nm.toLowerCase().indexOf(townorm.trim()) === 0) { primary = nm; break; }
         }
       }
+      // If we still can't identify which department's district this is
+      // (e.g. the township doesn't map to any known department), don't
+      // guess — leave the agency blank for a human to fill in rather than
+      // picking an arbitrary responding department.
       if (primary) out._mutualAgencies = [primary];
-      else if (deptList.length) out._mutualAgencies = [deptList[0]]; // last resort
     } else if (deptList.length) {
       // Call in our own district with other departments present → we RECEIVED
       // aid from all of them.
@@ -2147,6 +2201,13 @@ function applyDispatchParse(rawText) {
       if (F.mutual.indexOf(ag) < 0) { F.mutual.push(ag); addedAgencies.push(ag); }
     });
     if (addedAgencies.length) filled.push('Mutual Aid ' + got._mutualDir + ': ' + addedAgencies.join(', '));
+  } else if (got._mutualDir && !F.mutualDir) {
+    // We know aid was given/received but couldn't identify which agency
+    // (e.g. the call's township doesn't match a known department) — set
+    // the direction so a human just has to pick the agency, not
+    // discover the whole thing from scratch.
+    F.mutualDir = got._mutualDir;
+    filled.push('Mutual Aid ' + got._mutualDir + ' — select the agency on the Dispatch tab');
   }
   var dispText = null;
   if (filled.length && got._dispText) { F.dispActual = got._dispText; dispText = got._dispText; }
