@@ -405,7 +405,7 @@ async function loadPersonnel() {
   }
 };
 
-const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","SOUTH CAYUGA","Other"];
+const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","SOUTH CAYUGA","Mercy Flight Central","LifeNet","Other"];
 
 // Officer ranks for the incident commander
 const IC_RANKS = ["Chief","Assistant Chief","2nd Assistant Chief","Captain","Lieutenant","Firefighter"];
@@ -428,6 +428,7 @@ const HOSPITALS = [
   "Strong Memorial Hospital — Rochester (~60 mi)",
   "Rochester General Hospital — Rochester (~60 mi)",
   "Not Transported",
+  "Standby — No Transport",
   "Other",
 ];
 
@@ -708,7 +709,7 @@ const DISPOSITIONS = ["Fire Extinguished","Fire Controlled","Out on Arrival","Pa
 const CAUSES = ["Undetermined","Under Investigation","Accidental","Electrical","Cooking","Heating Equipment","Smoking","Open Flame","Vehicle/Mechanical","Intentional","Natural (lightning/weather)","N/A"];
 
 const APPARATUS = ["Rescue 2","Engine 1","Engine 2","Rescue 1","Chief's Vehicle","Quint 1","Squad 1","Squad 2","Squad 3","Tanker 1"];
-const TABS = ["Dispatch","Command","Times","Incident","Apparatus","Personnel","MVC","EMS","Law","Narrative","Finalize"];
+const TABS = ["Dispatch","Command","Times","Incident","Apparatus","Personnel","MVC","EMS","Law","Narrative","Review","Finalize"];
 
 const EMPTY = {
   date:"", runNum:"", ic:"", icRank:"",
@@ -1258,7 +1259,8 @@ function ambRow(i, renderFn) {
     pcrInp.style.marginBottom = '8px';
     wrap.appendChild(pcrInp);
 
-    // Transported to — receiving hospital
+    // Transported to — receiving hospital (includes a Standby option for
+    // an ambulance that responded but had no patient contact/transport)
     const hospLbl = document.createElement('div');
     hospLbl.className = 'lbl';
     hospLbl.textContent = 'Transported To';
@@ -1305,7 +1307,7 @@ function tabEMS() {
   emsCard.className = 'card';
   const emsTitle = document.createElement('div');
   emsTitle.className = 'card-title';
-  emsTitle.textContent = 'Ambulances Used';
+  emsTitle.textContent = 'Ambulances Used / Standby';
   const emsBody = document.createElement('div');
   emsBody.className = 'card-body';
   emsCard.appendChild(emsTitle);
@@ -2423,18 +2425,22 @@ function generateNarrative() {
   const selPers = PERSONNEL.filter(p=>F.personnel[p.badge]);
   const totalPers = parseInt(F.totalCt)||selPers.length;
   const mutArr = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
-  const ambArr = (F.amb||[]).filter(a=>a.svc).map(function(a){
+  function ambName(a) {
     var n = a.svc==='Other' ? (a.custom||'Other') : a.svc;
     // Title-case all-caps service names so they read naturally ("THROOP" → "Throop")
     if (n === n.toUpperCase()) {
       n = n.toLowerCase().replace(/\b[a-z]/g, function(ch){ return ch.toUpperCase(); });
     }
     // Identify it as an ambulance, unless the name already says so
-    if (!/\b(ambulance|ems|medic|rescue squad|air ?med|lifenet|helicopter)\b/i.test(n)) {
+    // (or it's an air ambulance/helicopter service, which isn't an "ambulance")
+    if (!/\b(ambulance|ems|medic|rescue squad|air ?med|lifenet|helicopter|mercy flight|flight)\b/i.test(n)) {
       n += ' Ambulance';
     }
     return n;
-  });
+  }
+  const ambArr = (F.amb||[]).filter(a=>a.svc && a.hospital !== 'Standby — No Transport' && a.hospital !== 'Not Transported').map(ambName);
+  const ambNotTransportedArr = (F.amb||[]).filter(a=>a.svc && a.hospital === 'Not Transported').map(ambName);
+  const ambStandbyArr = (F.amb||[]).filter(a=>a.svc && a.hospital === 'Standby — No Transport').map(ambName);
   var nerisTypeEff = effVal(F.nerisType, F.nerisTypeOther);
   var locationUseEff = effVal(F.locationUse, F.locationUseOther);
   var arrivalEff = effVal(F.arrivalCond, F.arrivalCondOther);
@@ -2657,7 +2663,7 @@ function generateNarrative() {
   // Receiving hospital(s) — strip the distance hint for the narrative
   var hospArr = (F.amb||[]).filter(function(a){ return a.svc && a.hospital; }).map(function(a){
     var h = a.hospital === 'Other' ? (a.hospitalOther || '') : a.hospital;
-    if (!h || h === 'Not Transported') return '';
+    if (!h || h === 'Not Transported' || h === 'Standby — No Transport') return '';
     return h.split(' — ')[0].trim();
   }).filter(Boolean);
   // de-dupe
@@ -2671,12 +2677,40 @@ function generateNarrative() {
     } else if (disp === 'Patient Refused') {
       s.push('Patient care was provided by ' + joinList(ambArr) + ', but the patient refused transport.');
       dispHandled = true;
-    } else {
+    } else if (hospArr.length) {
+      // Ambulance has a real destination on file even though the
+      // disposition dropdown wasn't set to "Patient Transported"
       s.push('Patient care and transport were handled by ' + joinList(ambArr) + hospPhrase + '.');
+    } else {
+      // No destination and no explicit disposition — only claim care was
+      // given, never claim transport happened
+      s.push('Patient care was provided by ' + joinList(ambArr) + '.');
     }
   } else if (isPatientDisp) {
     if (disp === 'Patient Transported') { s.push('The patient was transported' + hospPhrase + '.'); dispHandled = true; }
     else { s.push('The patient refused transport.'); dispHandled = true; }
+  }
+
+  // Ambulance(s) marked "Not Transported" — care was given, no transport.
+  // Skip only if the disposition sentence already said this (that only
+  // happens when there were no OTHER ambulances that did transport —
+  // otherwise this ambulance's own "not transported" status still needs
+  // its own mention even if a different ambulance transported the patient).
+  if (ambNotTransportedArr.length && !(dispHandled && !ambArr.length)) {
+    s.push(joinList(ambNotTransportedArr) + ' provided patient care; the patient was not transported.');
+  }
+
+  // Standby ambulance(s) — responded but had no patient contact/transport
+  if (ambStandbyArr.length) {
+    s.push(joinList(ambStandbyArr) + ' staged on standby and had no patient contact.');
+  }
+
+  // Refused Transport PCR # entries — documents a patient refusal with a
+  // PCR on file, independent of the ambulance rows above.
+  var refPcrArr = (F.refusedPcr||[]).filter(function(p){ return p && p.trim(); });
+  if (refPcrArr.length) {
+    var pcrWord = refPcrArr.length > 1 ? 'PCRs' : 'a PCR';
+    s.push('Refusal of transport was documented with ' + pcrWord + ' on file (' + refPcrArr.join(', ') + ').');
   }
 
   // ── Outcome + cause ──
@@ -3467,6 +3501,187 @@ function injuredCard() {
   return injCard;
 }
 
+// ── Review tab (read-only summary + missing-field warnings) ──
+function jumpToTab(idx) {
+  tab = idx;
+  render();
+}
+
+function reviewRow(label, value, opts) {
+  opts = opts || {};
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:7px 0;border-bottom:1px solid #f0e8d8';
+  const l = document.createElement('div');
+  l.textContent = label;
+  l.style.cssText = 'font-size:11px;color:#8b0000;font-weight:700;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;width:38%';
+  const v = document.createElement('div');
+  const isMissing = !value || !String(value).trim();
+  v.textContent = isMissing ? (opts.missingText || '— not set') : value;
+  v.style.cssText = 'font-size:14px;text-align:right;flex:1;color:' + (isMissing && opts.warn ? '#b8860b' : '#1a1a1a') + ';font-weight:' + (isMissing && opts.warn ? '700' : '400');
+  row.appendChild(l);
+  row.appendChild(v);
+  if (opts.jumpTab !== undefined) {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => jumpToTab(opts.jumpTab));
+  }
+  return row;
+}
+
+function reviewSection(title, jumpTab, ...rows) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const t = document.createElement('div');
+  t.className = 'card-title';
+  t.style.cssText = 'display:flex;justify-content:space-between;align-items:center;cursor:pointer';
+  const tLabel = document.createElement('span');
+  tLabel.textContent = title;
+  const tJump = document.createElement('span');
+  tJump.textContent = 'Edit →';
+  tJump.style.cssText = 'font-size:11px;color:#1a4a8a;font-weight:600';
+  t.appendChild(tLabel);
+  t.appendChild(tJump);
+  t.addEventListener('click', () => jumpToTab(jumpTab));
+  const body = document.createElement('div');
+  body.className = 'card-body';
+  rows.forEach(r => body.appendChild(r));
+  card.appendChild(t);
+  card.appendChild(body);
+  return card;
+}
+
+function tabReview() {
+  const wrap = document.createElement('div');
+  const TAB_IDX = { dispatch:0, command:1, times:2, incident:3, apparatus:4, personnel:5, mvc:6, ems:7, law:8, narrative:9 };
+
+  // ── Warnings banner — only shown if something important is missing ──
+  const warnings = [];
+  if (!F.runNum) warnings.push({ text: 'No Incident Number set', jump: TAB_IDX.dispatch });
+  if (!F.date) warnings.push({ text: 'No Date set', jump: TAB_IDX.dispatch });
+  if (!F.ic) warnings.push({ text: 'No Incident Commander selected', jump: TAB_IDX.command });
+  if (!F.address) warnings.push({ text: 'No Address set', jump: TAB_IDX.dispatch });
+  if (!F.nerisType) warnings.push({ text: 'No NERIS Incident Type selected', jump: TAB_IDX.incident });
+  if (!Object.keys(F.apparatus||{}).length) warnings.push({ text: 'No apparatus selected', jump: TAB_IDX.apparatus });
+  if (!Object.keys(F.personnel||{}).length) warnings.push({ text: 'No personnel selected', jump: TAB_IDX.personnel });
+  if (!F.disp) warnings.push({ text: 'No Dispatched time set', jump: TAB_IDX.times });
+  if (!F.inQ) warnings.push({ text: 'No In Quarters time set', jump: TAB_IDX.times });
+  if (!F.narrative) warnings.push({ text: 'Narrative not generated yet', jump: TAB_IDX.narrative });
+  if (!F.reportBy) warnings.push({ text: 'No Report By selected (required to save)', jump: TABS.length - 1 });
+
+  if (warnings.length) {
+    const warnBox = document.createElement('div');
+    warnBox.style.cssText = 'background:#fff8e1;border:1.5px solid #e0c86a;border-radius:10px;padding:12px 14px;margin-bottom:14px';
+    const warnTitle = document.createElement('div');
+    warnTitle.textContent = '⚠ ' + warnings.length + ' item' + (warnings.length===1?'':'s') + ' to check before filing';
+    warnTitle.style.cssText = 'font-size:13px;font-weight:700;color:#7a5c00;margin-bottom:6px';
+    warnBox.appendChild(warnTitle);
+    warnings.forEach(w => {
+      const wRow = document.createElement('div');
+      wRow.textContent = '• ' + w.text;
+      wRow.style.cssText = 'font-size:12.5px;color:#7a5c00;padding:2px 0;cursor:pointer;text-decoration:underline';
+      wRow.addEventListener('click', () => jumpToTab(w.jump));
+      warnBox.appendChild(wRow);
+    });
+    wrap.appendChild(warnBox);
+  } else {
+    const okBox = document.createElement('div');
+    okBox.style.cssText = 'background:#e8f5e9;border:1.5px solid #a5d6a7;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;font-weight:700;color:#2d6a2d';
+    okBox.textContent = '✓ Looks complete — nothing obviously missing';
+    wrap.appendChild(okBox);
+  }
+
+  // ── Incident summary ──
+  const icP = PERSONNEL.find(p => p.badge === F.ic);
+  const icDisplay = icP ? (F.icRank ? F.icRank + ' ' + icP.name : icP.name) + ' #' + icP.badge : '';
+  wrap.appendChild(reviewSection('Incident', TAB_IDX.dispatch,
+    reviewRow('Incident #', F.runNum, {warn:true}),
+    reviewRow('Date', F.date, {warn:true}),
+    reviewRow('Address', F.address, {warn:true}),
+  ));
+
+  wrap.appendChild(reviewSection('Command', TAB_IDX.command,
+    reviewRow('Incident Commander', icDisplay, {warn:true}),
+  ));
+
+  wrap.appendChild(reviewSection('Times', TAB_IDX.times,
+    reviewRow('Dispatched', F.disp, {warn:true}),
+    reviewRow('Cleared', F.clear),
+    reviewRow('In Quarters', F.inQ, {warn:true}),
+  ));
+
+  const nerisTypeEff = effVal(F.nerisType, F.nerisTypeOther);
+  wrap.appendChild(reviewSection('Incident Type', TAB_IDX.incident,
+    reviewRow('NERIS Type', nerisTypeEff ? (nerisCatLabel(F.nerisCat) + ': ' + nerisTypeEff) : '', {warn:true}),
+    reviewRow('Disposition', F.disposition),
+    reviewRow('Actions Taken', (F.actionsTaken||[]).length ? F.actionsTaken.length + ' selected' : ''),
+  ));
+
+  const appList = Object.keys(F.apparatus||{});
+  wrap.appendChild(reviewSection('Apparatus', TAB_IDX.apparatus,
+    reviewRow('Units Responded', appList.length ? appList.join(', ') : '', {warn:true}),
+  ));
+
+  const selPersCount = Object.keys(F.personnel||{}).length;
+  wrap.appendChild(reviewSection('Personnel', TAB_IDX.personnel,
+    reviewRow('Total Personnel', selPersCount ? String(selPersCount) : '', {warn:true}),
+    reviewRow('Personnel Injured', F.injName ? (PERSONNEL.find(p=>p.badge===F.injName)||{name:F.injName}).name : 'None'),
+  ));
+
+  const carsUsed = (F.cars||[]).filter(c => c.model || c.plate || c.color);
+  if (carsUsed.length || F.mvcVehicles || F.mvcExtrication) {
+    wrap.appendChild(reviewSection('MVC', TAB_IDX.mvc,
+      reviewRow('Vehicles Involved', F.mvcVehicles || (carsUsed.length ? String(carsUsed.length) : '')),
+      reviewRow('Extrication Required', F.mvcExtrication),
+    ));
+  }
+
+  const ambUsed = (F.amb||[]).filter(a => a.svc);
+  if (ambUsed.length || F.numPatients) {
+    wrap.appendChild(reviewSection('EMS', TAB_IDX.ems,
+      reviewRow('Number of Patients', F.numPatients),
+      reviewRow('Ambulances', ambUsed.length ? ambUsed.map(ambName).join(', ') : ''),
+    ));
+  }
+
+  const lawUsed = (F.law||[]).filter(l => l && l.trim());
+  if (lawUsed.length) {
+    wrap.appendChild(reviewSection('Law Enforcement', TAB_IDX.law,
+      reviewRow('Agencies on Scene', lawUsed.map(l => l.split('||')[0]).join(', ')),
+    ));
+  }
+
+  const mutArr = (Array.isArray(F.mutual)?F.mutual:[F.mutual]).filter(Boolean);
+  if (mutArr.length) {
+    wrap.appendChild(reviewSection('Mutual Aid', TAB_IDX.dispatch,
+      reviewRow('Direction', F.mutualDir),
+      reviewRow('Agencies', mutArr.join(', ')),
+    ));
+  }
+
+  // ── Narrative preview ──
+  const narrCard = document.createElement('div');
+  narrCard.className = 'card';
+  const narrTitle = document.createElement('div');
+  narrTitle.className = 'card-title';
+  narrTitle.style.cssText = 'display:flex;justify-content:space-between;align-items:center;cursor:pointer';
+  const narrLabel = document.createElement('span');
+  narrLabel.textContent = 'Narrative';
+  const narrJump = document.createElement('span');
+  narrJump.textContent = 'Edit →';
+  narrJump.style.cssText = 'font-size:11px;color:#1a4a8a;font-weight:600';
+  narrTitle.appendChild(narrLabel);
+  narrTitle.appendChild(narrJump);
+  narrTitle.addEventListener('click', () => jumpToTab(TAB_IDX.narrative));
+  const narrBody = document.createElement('div');
+  narrBody.className = 'card-body';
+  narrBody.style.cssText = 'font-size:13.5px;line-height:1.6;color:#333';
+  narrBody.textContent = F.narrative || '(No narrative generated yet — tap to go write one.)';
+  narrCard.appendChild(narrTitle);
+  narrCard.appendChild(narrBody);
+  wrap.appendChild(narrCard);
+
+  return wrap;
+}
+
 function tabPreview() {
   const wrap = document.createElement('div');
 
@@ -3878,7 +4093,7 @@ function buildPrintHTML() {
         +'<th style="padding:2px 5px;border:1px solid #ddd;font-size:6pt;width:34%">Transported To</th></tr>';
       usedAmbs.forEach(function(a,i){
         var hosp = a.hospital === 'Other' ? (a.hospitalOther||'') : (a.hospital||'');
-        if (hosp) hosp = hosp.split(' — ')[0];
+        if (hosp && hosp !== 'Standby — No Transport') hosp = hosp.split(' — ')[0];
         H+='<tr><td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt;font-weight:bold;text-align:center">'+(i+1)+'</td>'
           +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(ambName(a)||"—")+'</td>'
           +'<td style="padding:2px 5px;border:1px solid #ddd;font-size:7.5pt">'+(a.pcr||"—")+'</td>'
@@ -3895,6 +4110,13 @@ function buildPrintHTML() {
   if(F.numPatients && F.numPatients!=='0' && !usedAmbs.length){
     H+='<div style="font-size:7.5pt;padding:2px 7px;margin-bottom:4px;border-left:3px solid #555">'
       +'<b>Patients:</b> '+F.numPatients+'</div>';
+  }
+
+  // REFUSED TRANSPORT PCR (fallback line — only if the EMS/Ambulances
+  // table above didn't already show it, i.e. no ambulance was used)
+  if(usedRef.length && !usedAmbs.length){
+    H+='<div style="font-size:7.5pt;padding:2px 7px;margin-bottom:4px;border-left:3px solid #555">'
+      +'<b>Refused Transport PCR:</b> '+usedRef.join(", ")+'</div>';
   }
 
   // MUTUAL AID
@@ -4214,7 +4436,7 @@ function renderTabBar() {
 function renderTab() {
   const tc = document.getElementById('tab-content');
   tc.innerHTML = '';
-  const builders = [tabIncident,tabCommand,tabTimes,tabDispatch,tabApparatus,tabPersonnel,tabMVA,tabEMS,tabLaw,tabRemarks,tabPreview];
+  const builders = [tabIncident,tabCommand,tabTimes,tabDispatch,tabApparatus,tabPersonnel,tabMVA,tabEMS,tabLaw,tabRemarks,tabReview,tabPreview];
   try {
     tc.appendChild(builders[tab]());
   } catch(e) {
