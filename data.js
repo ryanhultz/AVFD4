@@ -88,7 +88,7 @@ async function loadPersonnel() {
   }
 };
 
-const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","SOUTH CAYUGA","Mercy Flight Central","LifeNet","Other"];
+const AMB_SERVICES = ["AUBURN CITY","THROOP","FLEMING","CAYUGA","SOUTH CAYUGA","SKANEATELES (SAVES)","Mercy Flight Central","LifeNet","Other"];
 
 // Officer ranks for the incident commander
 const IC_RANKS = ["Chief","Assistant Chief","2nd Assistant Chief","Captain","Lieutenant","Firefighter"];

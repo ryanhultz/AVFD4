@@ -225,7 +225,8 @@ function tabIncident() {
   const MUTUAL_AGENCIES = [
     "Throop Fire","Cayuga Fire","Seneca Falls Fire","Owasco Fire",
     "Auburn Fire","Union Springs Fire","Port Byron Fire","Weedsport Fire",
-    "Fleming Fire","Montezuma Fire","Aurora Fire","Scipio Fire","Poplar Ridge Fire","Other"
+    "Fleming Fire","Montezuma Fire","Aurora Fire","Scipio Fire","Poplar Ridge Fire",
+    "Genoa Fire","Moravia Fire","Other"
   ];
 
   if (!Array.isArray(F.mutual)) F.mutual = F.mutual ? [F.mutual] : [];

@@ -45,6 +45,7 @@ const CAD_AMB_MAP = {
   "FLMA": "FLEMING",      // e.g. FLMA1B
   "CAYA": "CAYUGA",
   "SCYA": "SOUTH CAYUGA", // confirmed from real CAD data (26AU-0247), e.g. SCYA1A
+  "SAV": "SKANEATELES (SAVES)", // confirmed from real 6-week CAD data, e.g. SAVA1A
 };
 
 // CAD unit-code prefixes → mutual-aid departments (only those in the
@@ -60,14 +61,22 @@ const CAD_DEPT_MAP = {
   "CAY": "Cayuga Fire",
   "UNS": "Union Springs Fire",
   "USP": "Union Springs Fire",  // confirmed alternate CAD prefix for Union Springs
-  "PBY": "Port Byron Fire",
+  "PBY": "Port Byron Fire",     // guessed prefix — never confirmed in real data
+  "PTB": "Port Byron Fire",     // CONFIRMED from real 6-week CAD data (the real prefix)
   "WDS": "Weedsport Fire",
-  "MON": "Montezuma Fire",
+  "MON": "Montezuma Fire",      // guessed prefix — never confirmed in real data
+  "MTZ": "Montezuma Fire",      // CONFIRMED from real 6-week CAD data (the real prefix)
   "ARO": "Aurora Fire",
   "SPO": "Scipio Fire",         // confirmed from real CAD data (26AU-0239)
   "PPR": "Poplar Ridge Fire",   // confirmed from real CAD data (26AU-0239)
-  // "LGH" seen in real CAD data but the department name is unknown —
-  // intentionally left unmapped rather than guessed. Add it here if
+  "GEN": "Genoa Fire",          // confirmed from real 6-week CAD data (GENCHF/GENEN1/GENTA1)
+  "MOR": "Moravia Fire",        // confirmed from real 6-week CAD data (MORCHF/MORTA1)
+  // "LGH" and "WPT" seen in real CAD data but the department names are
+  // unknown — intentionally left unmapped rather than guessed. Add them
+  // here if confirmed later.
+  // "JOR" and "SVL" seen only as a lone chief unit (JORCHF, SVLCHF) — too
+  // little data to identify or to matter for mutual-aid detection (a
+  // chief-only unit never counts as mutual aid anyway).
   // confirmed later.
 };
 
@@ -173,10 +182,11 @@ function parseDispatchText(text) {
   else if (/fire-?\s*vehicle|vehicle fire|car fire|truck fire/.test(scan)) out._cat = 'FIRE';
   else if (/fire-?\s*(brush|grass|wildland|outside|rubbish)|brush fire|grass fire/.test(scan)) out._cat = 'FIRE';
   else if (/fire-?\s*chimney|chimney fire/.test(scan)) out._cat = 'FIRE';
+  else if (/fire-?\s*util|util(?:ity)?\s*pole|utility fire|infrastructure fire/.test(scan)) out._cat = 'FIRE';
   else if (/entrap|extricat|pin-?in|pinned/.test(scan)) out._cat = 'RESCUE';
   else if (/\bmva\w*|\bmvc\b|motor vehicle|car accident/.test(scan)) out._cat = 'MEDICAL';
-  else if (/cardiac|chest pain|stroke|breathing|unresponsive|unconscious|seizure|overdose|\bems\b|medical|sick person|\bfall\b|injur|hemorrhage|laceration|bleeding|allerg|sting/.test(scan)) out._cat = 'MEDICAL';
-  else if (/gas leak|odor of gas|fuel spill|hazmat|carbon monoxide|wires down|power line|electrical hazard/.test(scan)) out._cat = 'HAZSIT';
+  else if (/cardiac|chest pain|heart problem|stroke|breathing|unresponsive|unconscious|seizure|convulsion|overdose|\bems\b|medical|sick person|\bfalls?\b|injur|trauma|hemorrhage|laceration|bleeding|allerg|sting|back pain|suicide|unknown problem|person down/.test(scan)) out._cat = 'MEDICAL';
+  else if (/gas leak|odor of gas|fuel spill|hazmat|carbon monoxide|wires? down|power line|electrical hazard|hazard-?fire/.test(scan)) out._cat = 'HAZSIT';
   else if (/cit\.?\s*assist|citizen assist|lift assist|service call|lockout|locked out/.test(scan)) out._cat = 'PUBSERV';
   else if (/alarm/.test(scan)) out._cat = 'PUBSERV';
   else if (/cancel|false alarm|good intent/.test(scan)) out._cat = 'NOEMERG';
