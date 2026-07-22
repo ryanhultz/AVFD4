@@ -582,8 +582,9 @@ async function generateAndShare() {
 // RENDER
 // ══════════════════════════════
 function updateHeader() {
-  document.getElementById('header-sub').textContent =
-    `#${F.runNum||'—'} · ${F.date||'No date set'}`;
+  document.getElementById('header-sub').textContent = (viewMode === 'home')
+    ? 'Report Queue'
+    : `#${F.runNum||'—'} · ${F.date||'No date set'}`;
 }
 
 function renderTabBar() {
@@ -593,7 +594,7 @@ function renderTabBar() {
     const btn = document.createElement('button');
     btn.className = 'tab-btn' + (i===tab?' active':'');
     btn.textContent = t;
-    btn.addEventListener('click', () => { tab=i; render(); });
+    btn.addEventListener('click', () => { tab=i; markInProgress(); render(); });
     bar.appendChild(btn);
   });
 }
@@ -620,23 +621,149 @@ function renderNav() {
     const back = document.createElement('button');
     back.className = 'btn-back';
     back.textContent = '← Back';
-    back.addEventListener('click', () => { tab--; render(); });
+    back.addEventListener('click', () => { tab--; markInProgress(); render(); });
     nav.appendChild(back);
   }
   if (tab < TABS.length-1) {
     const next = document.createElement('button');
     next.className = 'btn-next';
     next.textContent = 'Next →';
-    next.addEventListener('click', () => { tab++; render(); });
+    next.addEventListener('click', () => { tab++; markInProgress(); render(); });
     nav.appendChild(next);
   }
 }
 
 function render() {
+  const clearBtn = document.getElementById('clearform-btn');
+  if (viewMode === 'home') {
+    if (clearBtn) clearBtn.style.display = 'none';
+    renderHomeScreen();
+    return;
+  }
+  if (clearBtn) clearBtn.style.display = '';
   updateHeader();
   renderTabBar();
   renderTab();
   renderNav();
+}
+
+// ── Home screen: Unstarted / In Progress / Complete queue ──
+// viewMode is a simple global switch between the splash/queue screen and
+// the normal tab-based report editor. Starts on 'home' so the app opens
+// to the queue instead of dropping straight into a report.
+var viewMode = 'home';
+
+function showHomeScreen() {
+  viewMode = 'home';
+  render();
+}
+
+function openReportFromQueue(id, status) {
+  viewMode = 'editor'; // set BEFORE the load so loadFromCloudReport's own render() shows the editor, not home
+  loadFromCloudReport(id).then(() => {
+    if (status === 'unstarted') markInProgress();
+  });
+}
+
+function renderHomeScreen() {
+  document.getElementById('tab-bar').innerHTML = '';
+  document.getElementById('nav-row').innerHTML = '';
+  updateHeader();
+  const tc = document.getElementById('tab-content');
+  tc.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'padding:4px 0 24px';
+
+  const intro = document.createElement('div');
+  intro.style.cssText = 'font-size:13px;color:#888;margin-bottom:16px;line-height:1.4';
+  intro.textContent = 'Reports waiting to be started, in progress, and recently completed — shared across all devices.';
+  wrap.appendChild(intro);
+
+  const startBtn = document.createElement('button');
+  startBtn.className = 'btn-print';
+  startBtn.textContent = '➕ Start New Report';
+  startBtn.style.marginBottom = '18px';
+  startBtn.addEventListener('click', () => newReport());
+  wrap.appendChild(startBtn);
+
+  const loadingMsg = document.createElement('div');
+  loadingMsg.style.cssText = 'font-size:13px;color:#888;padding:10px 0';
+  loadingMsg.textContent = 'Loading reports…';
+  wrap.appendChild(loadingMsg);
+
+  tc.appendChild(wrap);
+
+  fetch(REPORTS_API_URL)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+    .then(list => {
+      if (!Array.isArray(list)) throw new Error('bad response');
+      loadingMsg.remove();
+      const buckets = { unstarted: [], in_progress: [], complete: [] };
+      list.forEach(r => {
+        const st = buckets[r.status] ? r.status : 'complete'; // old rows default to complete
+        buckets[st].push(r);
+      });
+      wrap.appendChild(homeSection('🆕 Unstarted', buckets.unstarted, 'unstarted',
+        'Reports pasted from dispatch but not opened yet.'));
+      wrap.appendChild(homeSection('🚧 In Progress', buckets.in_progress, 'in_progress',
+        'Someone has started filling this out.'));
+      wrap.appendChild(homeSection('✅ Complete (recent)', buckets.complete.slice(0, 8), 'complete',
+        'Filed reports. Tap "View Full History" on Finalize to search everything.'));
+    })
+    .catch(() => {
+      loadingMsg.style.color = '#8b0000';
+      loadingMsg.textContent = 'Could not reach the shared report list (offline?). You can still start a new report.';
+    });
+}
+
+function homeSection(title, items, status, help) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const t = document.createElement('div');
+  t.className = 'card-title';
+  t.textContent = title + '  (' + items.length + ')';
+  const body = document.createElement('div');
+  body.className = 'card-body';
+
+  const helpEl = document.createElement('div');
+  helpEl.style.cssText = 'font-size:11px;color:#888;margin-bottom:8px;line-height:1.4';
+  helpEl.textContent = help;
+  body.appendChild(helpEl);
+
+  if (!items.length) {
+    const none = document.createElement('div');
+    none.style.cssText = 'font-size:13px;color:#aaa;padding:6px 0';
+    none.textContent = 'Nothing here right now.';
+    body.appendChild(none);
+  } else {
+    items.forEach(r => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0e8d8;cursor:pointer';
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1;min-width:0';
+      const line1 = document.createElement('div');
+      line1.style.cssText = 'font-size:14px;font-weight:700;color:#1a1a1a';
+      line1.textContent = r.run_num || '(no incident #)';
+      const line2 = document.createElement('div');
+      line2.style.cssText = 'font-size:11px;color:#888';
+      line2.textContent = [r.date, r.address, r.ic_name ? ('IC ' + r.ic_name) : ''].filter(Boolean).join('  ·  ');
+      info.appendChild(line1);
+      info.appendChild(line2);
+      row.appendChild(info);
+      const openBtn = document.createElement('button');
+      openBtn.textContent = 'Open';
+      openBtn.style.cssText = 'background:#8b0000;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;font-family:Georgia,serif;flex-shrink:0';
+      openBtn.addEventListener('click', () => openReportFromQueue(r.id, status));
+      row.appendChild(openBtn);
+      row.addEventListener('click', (e) => { if (e.target !== openBtn) openReportFromQueue(r.id, status); });
+      body.appendChild(row);
+    });
+  }
+
+  card.appendChild(t);
+  card.appendChild(body);
+  return card;
 }
 
 // ── Reload personnel roster on demand ──────────────────
@@ -672,8 +799,12 @@ try {
 
 // Then try to load the live roster from the Cloudflare Worker in the background
 loadPersonnel().then(() => {
-  // Silently re-render current tab to pick up updated roster
-  renderTab();
-  var hs = document.getElementById('header-sub');
-  if (hs) hs.textContent = '#' + (F.runNum||'—') + ' · ' + (F.date||'No date set');
+  // Silently re-render current tab to pick up updated roster (only if
+  // we're actually showing the tab editor — the home screen doesn't use
+  // PERSONNEL directly, so there's nothing to refresh there)
+  if (viewMode === 'editor') {
+    renderTab();
+    var hs = document.getElementById('header-sub');
+    if (hs) hs.textContent = '#' + (F.runNum||'—') + ' · ' + (F.date||'No date set');
+  }
 });

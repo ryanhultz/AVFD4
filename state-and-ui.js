@@ -74,6 +74,7 @@ function loadForm() {
   delete data.dispType; delete data.dispDetail;
   delete data.locCode;
   delete data._openTactic; delete data._openTactics;
+  if (typeof data._status !== 'string' || !data._status) data._status = 'unstarted';
   if (typeof data.responseMode !== 'string') data.responseMode = '';
   if (typeof data.arrivalCond !== 'string') data.arrivalCond = '';
   if (!Array.isArray(data.actionsTaken)) data.actionsTaken = [];
@@ -169,7 +170,7 @@ function archiveCurrent() {
 async function saveReportToCloud(report) {
   try {
     const icP = PERSONNEL.find(p => p.badge === report.ic);
-    const payload = Object.assign({}, report, { _icName: icP ? icP.name : (report.ic||'') });
+    const payload = Object.assign({}, report, { _icName: icP ? icP.name : (report.ic||''), _status: report._status || 'unstarted' });
     const res = await fetch(REPORTS_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -187,10 +188,23 @@ function newReport() {
   archiveCurrent();
   F = blankReport();
   F._id = 'r' + Date.now();
+  F._status = 'unstarted';
+  viewMode = 'editor';
   tab = 0;
   try { localStorage.setItem("afr_v4", JSON.stringify(F)); } catch(e) {}
   render();
   showCadPasteModal();
+}
+
+// Marks the current report as opened/being worked on. Called whenever a
+// member navigates into an Unstarted report's tabs — flips it out of the
+// Unstarted queue and into In Progress, both locally and in the cloud.
+function markInProgress() {
+  if (F._status === 'unstarted') {
+    F._status = 'in_progress';
+    saveForm();
+    saveReportToCloud(F);
+  }
 }
 
 // Modal shown at the start of a new report: paste the CAD dispatch email to
@@ -236,7 +250,10 @@ function showCadPasteModal() {
   const skipBtn = document.createElement('button');
   skipBtn.textContent = 'Skip';
   skipBtn.style.cssText = 'background:none;border:1.5px solid #c8a97a;color:#8b0000;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;font-family:Georgia,serif;cursor:pointer';
-  skipBtn.addEventListener('click', () => overlay.remove());
+  skipBtn.addEventListener('click', () => {
+    overlay.remove();
+    saveReportToCloud(F); // record the blank Unstarted entry either way
+  });
   btnRow.appendChild(skipBtn);
 
   const goBtn = document.createElement('button');
@@ -246,6 +263,7 @@ function showCadPasteModal() {
     const res = applyDispatchParse(modalTa.value);
     if (res.filled.length) {
       overlay.remove();
+      saveReportToCloud(F);
       render();
     } else {
       status.style.color = '#8b0000';

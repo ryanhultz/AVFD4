@@ -409,5 +409,6 @@ const EMPTY = {
   law:["","",""],
   cars:[{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""},{model:"",plate:"",color:""}],
   mutual:[], mutualDir:"", remarks:"", reportBy:"",
+  _status: "unstarted", // 'unstarted' | 'in_progress' | 'complete' — queue state
 };
 

@@ -2075,6 +2075,7 @@ function tabPreview() {
       return;
     }
     rbSel.style.borderColor = '';
+    F._status = 'complete';
     archiveCurrent();
     saveStatus.style.color = '#2d6a2d';
     saveStatus.textContent = '✓ Report saved.';

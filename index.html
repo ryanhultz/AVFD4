@@ -306,12 +306,20 @@
       <div id="header-title">Aurelius Fire &amp; Rescue</div>
       <div id="header-sub">Loading…</div>
     </div>
-    <button id="newreport-btn" title="Start a new report" onclick="newReport()"
-      style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);
-             color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
-             white-space:nowrap;margin-top:6px;flex-shrink:0;font-family:Georgia,serif">
-      ➕ New Report
-    </button>
+    <div style="display:flex;gap:6px;flex-shrink:0;margin-top:6px">
+      <button id="home-btn" title="Home" onclick="showHomeScreen()"
+        style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);
+               color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+               white-space:nowrap;font-family:Georgia,serif">
+        🏠 Home
+      </button>
+      <button id="newreport-btn" title="Start a new report" onclick="newReport()"
+        style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.35);
+               color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+               white-space:nowrap;font-family:Georgia,serif">
+        ➕ New Report
+      </button>
+    </div>
   </div>
   <div id="tab-bar"></div>
 </div>
@@ -319,7 +327,7 @@
 <div id="content">
   <div id="tab-content"></div>
   <div id="nav-row"></div>
-  <button class="btn-clear" onclick="clearForm()">Clear all form data</button>
+  <button id="clearform-btn" class="btn-clear" onclick="clearForm()">Clear all form data</button>
 </div>
 
 <script src="data.js"></script>
