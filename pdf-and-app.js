@@ -661,7 +661,10 @@ function showHomeScreen() {
 function openReportFromQueue(id, status) {
   viewMode = 'editor'; // set BEFORE the load so loadFromCloudReport's own render() shows the editor, not home
   loadFromCloudReport(id).then(() => {
-    if (status === 'unstarted') markInProgress();
+    // Check the report's own loaded status rather than trusting the
+    // status passed in from the queue list — more robust if the list
+    // was stale or the report changed between listing and opening.
+    markInProgress();
   });
 }
 
@@ -756,7 +759,6 @@ function homeSection(title, items, status, help) {
       openBtn.style.cssText = 'background:#8b0000;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;font-family:Georgia,serif;flex-shrink:0';
       openBtn.addEventListener('click', () => openReportFromQueue(r.id, status));
       row.appendChild(openBtn);
-      row.addEventListener('click', (e) => { if (e.target !== openBtn) openReportFromQueue(r.id, status); });
       body.appendChild(row);
     });
   }
